@@ -29,6 +29,7 @@ describe('InitCommand', () => {
   it('should initialize a new project with default values', async () => {
     const result = await command.execute(['--email', 'test@example.com'])
     expect(result.success).toBe(true)
+    expect(result.message).toContain('Successfully initialized')
     
     const storage = storageProvider.getStorage()
     const config = await storage.getProjectConfig()
@@ -43,6 +44,7 @@ describe('InitCommand', () => {
   it('should initialize a project with custom name', async () => {
     const result = await command.execute(['--name', 'Test Podcast', '--email', 'test@example.com'])
     expect(result.success).toBe(true)
+    expect(result.message).toContain('Test Podcast')
     
     const storage = storageProvider.getStorage()
     const config = await storage.getProjectConfig()
@@ -58,6 +60,8 @@ describe('InitCommand', () => {
       '--description', 'A test podcast'
     ])
     expect(result.success).toBe(true)
+    expect(result.message).toContain('Test Podcast')
+    expect(result.message).toContain('Test Author')
     
     const storage = storageProvider.getStorage()
     const config = await storage.getProjectConfig()
@@ -66,6 +70,46 @@ describe('InitCommand', () => {
     expect(config.author).toBe('Test Author')
     expect(config.email).toBe('test@example.com')
     expect(config.description).toBe('A test podcast')
+  })
+
+  it('should initialize a project in a custom path', async () => {
+    const customPath = await mkdtemp(join(tmpdir(), 'podcast-custom-'))
+    
+    try {
+      const result = await command.execute([
+        '--path', customPath,
+        '--name', 'Custom Path Podcast',
+        '--email', 'test@example.com'
+      ])
+      expect(result.success).toBe(true)
+      expect(result.message).toContain('Custom Path Podcast')
+      expect(result.message).toContain(customPath)
+      
+      // Verify storage was configured with custom path
+      const storage = storageProvider.getStorage()
+      expect(await storage.isInitialized()).toBe(true)
+      
+      const config = await storage.getProjectConfig()
+      expect(config.name).toBe('Custom Path Podcast')
+    } finally {
+      await rm(customPath, { recursive: true, force: true })
+    }
+  })
+
+  it('should perform dry run without making changes', async () => {
+    const result = await command.execute([
+      '--dry-run',
+      '--name', 'Dry Run Podcast',
+      '--email', 'test@example.com'
+    ])
+    expect(result.success).toBe(true)
+    expect(result.message).toContain('Would initialize')
+    expect(result.message).toContain('Dry Run Podcast')
+    expect(result.message).toContain('No changes were made')
+    
+    // Verify no changes were made
+    const storage = storageProvider.getStorage()
+    expect(await storage.isInitialized()).toBe(false)
   })
 
   it('should fail if project already exists', async () => {
@@ -92,6 +136,8 @@ describe('InitCommand', () => {
     expect(result.message).toContain('--author')
     expect(result.message).toContain('--email')
     expect(result.message).toContain('--description')
+    expect(result.message).toContain('--path')
+    expect(result.message).toContain('--dry-run')
   })
 
   it('should create project directory structure', async () => {
@@ -123,5 +169,17 @@ describe('InitCommand', () => {
     const result = await badCommand.execute(['--email', 'test@example.com'])
     expect(result.success).toBe(false)
     expect(result.message).toContain('Failed to initialize project')
+  })
+
+  it('should handle missing option values', async () => {
+    const result = await command.execute(['--name'])
+    expect(result.success).toBe(false)
+    expect(result.message).toContain('Missing value for option: --name')
+  })
+
+  it('should handle unknown options', async () => {
+    const result = await command.execute(['--unknown', 'value'])
+    expect(result.success).toBe(false)
+    expect(result.message).toContain('Unknown option: --unknown')
   })
 }) 

@@ -1,47 +1,77 @@
 import { z } from 'zod'
 
-// Define our schema types using Zod for runtime validation
+// Project Configuration
+export interface ProjectConfig {
+  name: string
+  author: string
+  email: string
+  description?: string
+  created: Date
+  updated: Date
+}
+
 export const ProjectConfigSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  author: z.string(),
+  name: z.string().min(1),
+  author: z.string().min(1),
   email: z.string().email(),
-  defaultTemplate: z.string().optional(),
+  description: z.string().optional(),
   created: z.date(),
   updated: z.date()
 })
 
+// Episode
+export interface Episode {
+  id: string
+  title: string
+  number: number
+  status: 'draft' | 'in-progress' | 'ready' | 'published'
+  created: Date
+  updated: Date
+  description?: string
+  publishDate?: Date
+  notes?: string
+  transcript?: string
+  metadata?: Record<string, unknown>
+}
+
 export const EpisodeSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  number: z.number(),
+  id: z.string().min(1),
+  title: z.string().min(1),
+  number: z.number().int().min(0),
   status: z.enum(['draft', 'in-progress', 'ready', 'published']),
-  publishDate: z.date().optional(),
   created: z.date(),
   updated: z.date(),
+  description: z.string().optional(),
+  publishDate: z.date().optional(),
   notes: z.string().optional(),
-  transcript: z.string().optional()
-})
-
-export const AssetSchema = z.object({
-  id: z.string(),
-  episodeId: z.string(),
-  type: z.enum(['audio', 'image', 'document', 'other']),
-  name: z.string(),
-  path: z.string(),
-  mimeType: z.string(),
-  size: z.number(),
-  created: z.date(),
+  transcript: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
 })
 
-// Infer TypeScript types from Zod schemas
-export type ProjectConfig = z.infer<typeof ProjectConfigSchema>
-export type Episode = z.infer<typeof EpisodeSchema>
-export type Asset = z.infer<typeof AssetSchema>
+// Asset
+export interface Asset {
+  id: string
+  episodeId: string
+  type: string
+  name: string
+  data: Buffer
+  created: Date
+  updated: Date
+  metadata?: Record<string, unknown>
+}
 
-// Storage interfaces
+export const AssetSchema = z.object({
+  id: z.string().min(1),
+  episodeId: z.string().min(1),
+  type: z.string().min(1),
+  name: z.string().min(1),
+  data: z.instanceof(Buffer),
+  created: z.date(),
+  updated: z.date(),
+  metadata: z.record(z.string(), z.unknown()).optional()
+})
+
+// Project Storage Interface
 export interface ProjectStorage {
   initializeProject(config: ProjectConfig): Promise<void>
   getProjectConfig(): Promise<ProjectConfig>
@@ -49,6 +79,7 @@ export interface ProjectStorage {
   isInitialized(): Promise<boolean>
 }
 
+// Episode Storage Interface
 export interface EpisodeStorage {
   createEpisode(episode: Episode): Promise<void>
   getEpisode(id: string): Promise<Episode>
@@ -57,11 +88,12 @@ export interface EpisodeStorage {
   deleteEpisode(id: string): Promise<void>
 }
 
+// Asset Storage Interface
 export interface AssetStorage {
   saveAsset(asset: Asset): Promise<void>
-  getAsset(episodeId: string, assetId: string): Promise<Asset>
+  getAsset(episodeId: string, id: string): Promise<Asset>
   listAssets(episodeId: string): Promise<Asset[]>
-  deleteAsset(episodeId: string, assetId: string): Promise<void>
+  deleteAsset(episodeId: string, id: string): Promise<void>
 }
 
 // Combined interface

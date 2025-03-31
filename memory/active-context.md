@@ -72,6 +72,51 @@ None currently.
 - Thorough validation and error handling
 - Path aliases for better code organization
 
+## Current Status
+
+### What's Working
+- Project initialization and configuration
+- Episode management (CRUD operations)
+- Asset storage with proper Buffer handling
+- PocketCasts sync command structure
+- Test coverage for core functionality
+
+### In Progress
+- PocketCasts integration
+  - Basic sync command implemented
+  - Need to add audio file download support
+  - Need to test with real data
+
+### Blockers
+None currently.
+
+### Next Steps
+1. Enhance PocketCasts sync command
+   - Add audio file download functionality
+   - Implement proper error handling with retries
+   - Add progress indicators for long operations
+   - Test with real PocketCasts account
+
+2. Add storage migration support
+   - Design versioning system for storage
+   - Create migration framework
+   - Add tests for migrations
+
+3. Improve error handling
+   - Add retry mechanisms for network operations
+   - Implement proper cleanup for failed operations
+   - Add detailed error reporting
+
+### Decisions Made
+1. Asset storage will use JSON with Buffer serialization
+2. PocketCasts metadata stored in episode.metadata.pocketcasts
+3. Error handling should include retries for transient failures
+
+### Questions to Resolve
+1. How should we handle partial downloads?
+2. What's the best way to implement storage migrations?
+3. Should we add a command to verify storage integrity?
+
 ## Current Stage
 - Phase 1: Project Setup and Core Infrastructure
 - Status: In Progress

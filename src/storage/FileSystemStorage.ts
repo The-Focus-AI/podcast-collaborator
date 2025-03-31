@@ -189,11 +189,7 @@ export class FileSystemStorage implements PodcastStorage {
     return join(this.assetsPath, episodeId, `${assetId}.json`)
   }
 
-  private getAssetDataPath(episodeId: string, assetId: string, extension: string): string {
-    return join(this.assetsPath, episodeId, `${assetId}${extension}`)
-  }
-
-  async saveAsset(asset: Asset, data?: Buffer): Promise<void> {
+  async saveAsset(asset: Asset): Promise<void> {
     if (!await this.isInitialized()) {
       throw new Error('Project not initialized')
     }
@@ -205,16 +201,18 @@ export class FileSystemStorage implements PodcastStorage {
     const episodeAssetsDir = join(this.assetsPath, asset.episodeId)
     await mkdir(episodeAssetsDir, { recursive: true })
 
-    // Save asset metadata
+    // Save asset metadata and data
     const assetPath = this.getAssetPath(asset.episodeId, asset.id)
-    await writeFile(assetPath, JSON.stringify(asset, null, 2))
-
-    // Save asset data if provided
-    if (data) {
-      const extension = asset.path.split('.').pop() || ''
-      const dataPath = this.getAssetDataPath(asset.episodeId, asset.id, `.${extension}`)
-      await writeFile(dataPath, data)
-    }
+    console.log('Saving asset to:', assetPath)
+    const assetJson = JSON.stringify(asset, (key, value) => {
+      if (key === 'data') {
+        // Convert Buffer to base64 string for JSON storage
+        return Buffer.isBuffer(value) ? value.toString('base64') : value
+      }
+      return value
+    }, 2)
+    console.log('Asset JSON:', assetJson)
+    await writeFile(assetPath, assetJson)
   }
 
   async getAsset(episodeId: string, assetId: string): Promise<Asset> {
@@ -224,30 +222,25 @@ export class FileSystemStorage implements PodcastStorage {
 
     try {
       const assetPath = this.getAssetPath(episodeId, assetId)
+      console.log('Reading asset from:', assetPath)
       const assetData = await readFile(assetPath, 'utf-8')
-      const asset = JSON.parse(assetData)
-      
-      // Convert date strings back to Date objects
-      asset.created = new Date(asset.created)
+      console.log('Asset data:', assetData)
+      const asset = JSON.parse(assetData, (key, value) => {
+        if (key === 'data' && value && typeof value === 'object' && value.type === 'Buffer') {
+          // Convert array back to Buffer
+          return Buffer.from(value.data)
+        }
+        if (key === 'created' || key === 'updated') {
+          return new Date(value)
+        }
+        return value
+      })
+      console.log('Parsed asset:', asset)
       
       return AssetSchema.parse(asset)
-    } catch {
+    } catch (error) {
+      console.error('Error getting asset:', error)
       throw new Error('Asset not found')
-    }
-  }
-
-  async getAssetData(episodeId: string, assetId: string): Promise<Buffer> {
-    if (!await this.isInitialized()) {
-      throw new Error('Project not initialized')
-    }
-
-    try {
-      const asset = await this.getAsset(episodeId, assetId)
-      const extension = asset.path.split('.').pop() || ''
-      const dataPath = this.getAssetDataPath(episodeId, assetId, `.${extension}`)
-      return readFile(dataPath)
-    } catch {
-      throw new Error('Asset data not found')
     }
   }
 
@@ -257,8 +250,10 @@ export class FileSystemStorage implements PodcastStorage {
     }
 
     const assetsDir = join(this.assetsPath, episodeId)
+    console.log('Listing assets in:', assetsDir)
     try {
       const files = await readdir(assetsDir)
+      console.log('Found files:', files)
       const assets: Asset[] = []
 
       for (const file of files) {
@@ -274,7 +269,8 @@ export class FileSystemStorage implements PodcastStorage {
       }
 
       return assets
-    } catch {
+    } catch (error) {
+      console.error('Error listing assets:', error)
       return [] // Return empty array if directory doesn't exist
     }
   }
@@ -285,14 +281,8 @@ export class FileSystemStorage implements PodcastStorage {
     }
 
     try {
-      const asset = await this.getAsset(episodeId, assetId)
       const assetPath = this.getAssetPath(episodeId, assetId)
       await rm(assetPath)
-
-      // Also delete asset data file if it exists
-      const extension = asset.path.split('.').pop() || ''
-      const dataPath = this.getAssetDataPath(episodeId, assetId, `.${extension}`)
-      await rm(dataPath).catch(() => {}) // Ignore error if data file doesn't exist
     } catch {
       throw new Error('Asset not found')
     }

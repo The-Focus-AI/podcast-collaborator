@@ -118,10 +118,9 @@ describe('FileSystemStorage', () => {
       episodeId: testEpisode.id,
       type: 'audio',
       name: 'Test Audio',
-      path: 'test.mp3',
-      mimeType: 'audio/mpeg',
-      size: 1024,
-      created: new Date('2024-01-01')
+      data: Buffer.from('test asset data'),
+      created: new Date('2024-01-01'),
+      updated: new Date('2024-01-01')
     }
 
     beforeEach(async () => {
@@ -135,12 +134,9 @@ describe('FileSystemStorage', () => {
     })
 
     it('should save and get asset', async () => {
-      const assetData = Buffer.from('test asset data')
-      await storage.saveAsset(testAsset, assetData)
+      await storage.saveAsset(testAsset)
       const asset = await storage.getAsset(testEpisode.id, testAsset.id)
       expect(asset).toEqual(testAsset)
-      const data = await storage.getAssetData(testEpisode.id, testAsset.id)
-      expect(Buffer.compare(data, assetData)).toBe(0)
     })
 
     it('should list assets', async () => {
@@ -157,10 +153,13 @@ describe('FileSystemStorage', () => {
     })
 
     it('should handle binary asset data', async () => {
-      const assetData = Buffer.from([0x00, 0x01, 0x02, 0x03])
-      await storage.saveAsset(testAsset, assetData)
-      const data = await storage.getAssetData(testEpisode.id, testAsset.id)
-      expect(Buffer.compare(data, assetData)).toBe(0)
+      const binaryAsset = {
+        ...testAsset,
+        data: Buffer.from([0x00, 0x01, 0x02, 0x03])
+      }
+      await storage.saveAsset(binaryAsset)
+      const asset = await storage.getAsset(testEpisode.id, testAsset.id)
+      expect(Buffer.compare(asset.data, binaryAsset.data)).toBe(0)
     })
   })
 })
