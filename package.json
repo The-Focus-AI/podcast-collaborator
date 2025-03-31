@@ -1,0 +1,60 @@
+{
+  "name": "podcast-collaborator",
+  "version": "1.0.0",
+  "description": "A terminal-based Pocketcast client with AI-powered features",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "podcast-collaborator": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.tsx",
+    "run-once": "tsx src/index.tsx",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "prettier --write src tests",
+    "prepack": "pnpm run build"
+  },
+  "keywords": [
+    "podcast",
+    "cli",
+    "terminal",
+    "pocketcasts",
+    "ai",
+    "transcription"
+  ],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.6.1",
+  "devDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@testing-library/react": "^16.2.0",
+    "@types/node": "^22.13.14",
+    "@types/react": "^19.0.12",
+    "@typescript-eslint/eslint-plugin": "^8.28.0",
+    "@typescript-eslint/parser": "^8.28.0",
+    "@vitest/ui": "^3.0.9",
+    "eslint": "^9.23.0",
+    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "ink-testing-library": "^4.0.0",
+    "prettier": "^3.5.3",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.28.0",
+    "vitest": "^3.0.9"
+  },
+  "dependencies": {
+    "ink": "^5.2.0",
+    "react": "18.2.0",
+    "zod": "^3.24.2"
+  }
+}
