@@ -1,43 +1,50 @@
 #!/usr/bin/env node
 import React from 'react';
-import { render } from 'ink';
-import { AppUI } from './components/App.js';
-import { CommandRegistry } from './cli/CommandRegistry.js';
-import { App } from './App.js';
+import { Command } from 'commander';
+import { StorageProvider } from './storage/StorageProvider.js';
+import { PocketCastsServiceImpl } from './services/PocketCastsService.js';
+import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
+import { join } from 'path';
+import { createSyncCommand } from './cli/commands/sync.js';
+import { createVersionCommand } from './cli/commands/version.js';
+import { createBrowseCommand } from './cli/commands/browse.js';
+
+async function getPackageVersion(): Promise<string> {
+  const __dirname = fileURLToPath(new URL('.', import.meta.url));
+  const packagePath = join(__dirname, '..', 'package.json');
+  const packageJson = await readFile(packagePath, 'utf-8');
+  return JSON.parse(packageJson).version;
+}
 
 async function main() {
   try {
-    const registry = new CommandRegistry();
-    const app = new App(registry);
+    const program = new Command();
+    const version = await getPackageVersion();
+    const storageProvider = new StorageProvider();
+    const pocketCastsService = new PocketCastsServiceImpl();
+
+    program
+      .name('podcast-cli')
+      .description('A CLI tool for podcast collaboration and management')
+      .version(version);
+
+    // Add commands
+    program.addCommand(createSyncCommand(storageProvider, pocketCastsService));
+    program.addCommand(createVersionCommand());
     
-    // Get all arguments after the script name, ignoring any '--' separator
-    const args = process.argv
-      .slice(2)
-      .filter(arg => arg !== '--');
+    // Add browse command and set it as default
+    const browseCommand = createBrowseCommand(storageProvider, pocketCastsService);
+    program.addCommand(browseCommand);
+    
+    // Make browse the default command
+    program.addHelpCommand(false); // Disable the default help command
+    program.action(async () => {
+      // If no command is specified, run the browse command
+      await browseCommand.parseAsync(process.argv);
+    });
 
-    const result = await app.run(args);
-
-    if (!result.success) {
-      // Handle both message and error properties
-      const errorMessage = result.message || result.error || 'Command failed';
-      console.error(errorMessage);
-      process.exit(1);
-    }
-
-    // If we have output, render it with Ink
-    if (result.output) {
-      console.log(result.output);
-    }
-
-    // If we have a success message, show it
-    if (result.message) {
-      console.log(result.message);
-    }
-
-    // If no output and success, just exit
-    if (!result.output && !result.message) {
-      process.exit(0);
-    }
+    await program.parseAsync(process.argv);
   } catch (error) {
     console.error('Fatal error:', error instanceof Error ? error.message : error);
     process.exit(1);

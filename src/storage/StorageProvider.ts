@@ -23,6 +23,10 @@ export class StorageProvider {
     this.validateConfig(this.config)
   }
 
+  getConfig(): StorageConfig {
+    return { ...this.config }
+  }
+
   private getDefaultPath(): string {
     return join(homedir(), '.podcast-cli')
   }

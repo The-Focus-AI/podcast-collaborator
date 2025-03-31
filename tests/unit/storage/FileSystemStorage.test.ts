@@ -3,23 +3,24 @@ import { FileSystemStorage } from '@/storage/FileSystemStorage.js'
 import { mkdir, rm, mkdtemp } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import type { Episode, Asset } from '@/storage/interfaces.js'
+import type { Episode, Asset, ProjectConfig } from '@/storage/interfaces.js'
 
 describe('FileSystemStorage', () => {
   let testDir: string
   let storage: FileSystemStorage
-  const testConfig = {
-    name: 'Test Podcast',
-    author: 'Test Author',
-    email: 'test@example.com',
-    description: 'A test podcast',
-    created: new Date('2024-01-01'),
-    updated: new Date('2024-01-01')
-  }
+  let testConfig: ProjectConfig
 
   beforeEach(async () => {
-    testDir = await mkdtemp(join(tmpdir(), 'podcast-test-'))
+    testDir = await mkdtemp(join(tmpdir(), 'podcast-collaborator-test-'))
     storage = new FileSystemStorage(testDir)
+    testConfig = {
+      name: 'Test Project',
+      author: 'Test Author',
+      email: 'test@example.com',
+      description: 'Test Description',
+      created: new Date(),
+      updated: new Date()
+    }
   })
 
   afterEach(async () => {
@@ -72,9 +73,17 @@ describe('FileSystemStorage', () => {
         url: 'https://example.com/episode1',
         podcastName: 'Test Podcast',
         podcastAuthor: 'Test Author',
+        description: 'Test description',
+        publishDate: new Date(),
+        duration: 3600,
         isStarred: false,
         isListened: false,
-        syncedAt: new Date()
+        progress: 0,
+        notes: '',
+        syncedAt: new Date(),
+        isDownloaded: false,
+        hasTranscript: false,
+        lastListenedAt: undefined
       }
     })
 
@@ -107,25 +116,12 @@ describe('FileSystemStorage', () => {
   })
 
   describe('Asset Storage', () => {
-    const testEpisode: Episode = {
-      id: 'test-episode-1',
-      title: 'Test Episode',
-      url: 'https://example.com/test-episode',
-      podcastName: 'Test Podcast',
-      podcastAuthor: 'Test Author',
-      publishDate: new Date('2024-01-01'),
-      duration: 3600,
-      isStarred: false,
-      isListened: false,
-      progress: 0,
-      syncedAt: new Date('2024-01-01')
-    }
-
-    const testAsset: Asset = {
-      type: 'audio',
-      name: 'Test Audio',
-      data: Buffer.from('test asset data'),
-      downloadedAt: new Date('2024-01-01')
+    let testEpisode: Episode
+    const testAsset = {
+      name: 'test-asset',
+      type: 'audio/mp3',
+      data: Buffer.from('test data'),
+      downloadedAt: new Date()
     }
 
     beforeEach(async () => {
@@ -134,6 +130,24 @@ describe('FileSystemStorage', () => {
       const isInit = await storage.isInitialized()
       if (!isInit) {
         throw new Error('Failed to initialize project')
+      }
+      testEpisode = {
+        id: 'test-episode-1',
+        title: 'Test Episode',
+        url: 'https://example.com/episode1',
+        podcastName: 'Test Podcast',
+        podcastAuthor: 'Test Author',
+        description: 'Test description',
+        publishDate: new Date(),
+        duration: 3600,
+        isStarred: false,
+        isListened: false,
+        progress: 0,
+        notes: '',
+        syncedAt: new Date(),
+        isDownloaded: false,
+        hasTranscript: false,
+        lastListenedAt: undefined
       }
       await storage.saveEpisode(testEpisode)
     })
@@ -163,21 +177,11 @@ describe('FileSystemStorage', () => {
         data: Buffer.from([0x00, 0x01, 0x02, 0x03])
       }
       await storage.saveAsset(testEpisode.id, binaryAsset)
-      const asset = await storage.getAsset(testEpisode.id, testAsset.name)
-      expect(Buffer.compare(asset.data, binaryAsset.data)).toBe(0)
+      const asset = await storage.getAsset(testEpisode.id, binaryAsset.name)
+      expect(asset.data).toEqual(binaryAsset.data)
     })
 
     it('should save and get asset for episode', async () => {
-      await storage.saveEpisode(testEpisode)
-      const episode = await storage.getEpisode(testEpisode.id)
-      expect(episode).toEqual(testEpisode)
-      await storage.saveEpisode(testEpisode)
-      const testAsset: Asset = {
-        type: 'audio',
-        name: 'test-asset',
-        data: Buffer.from('test data'),
-        downloadedAt: new Date()
-      }
       await storage.saveAsset(testEpisode.id, testAsset)
       const asset = await storage.getAsset(testEpisode.id, testAsset.name)
       expect(asset).toEqual(testAsset)

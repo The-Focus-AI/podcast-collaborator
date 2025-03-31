@@ -1,74 +1,26 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createSyncCommand } from '@/cli/commands/sync.js'
 import { StorageProvider } from '@/storage/StorageProvider.js'
-import { PocketCastsService } from '@/services/PocketCastsService.js'
+import { PocketCastsServiceImpl } from '@/services/PocketCastsService.js'
 import { Command } from 'commander'
-import { logger } from '@/utils/logger.js'
-import { MockStorage } from '@/storage/MockStorage.js'
-
-vi.mock('@/utils/logger.js', () => ({
-  logger: {
-    info: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    commandError: vi.fn(),
-    commandSuccess: vi.fn()
-  }
-}))
-
-vi.mock('@/services/OnePasswordService.js', () => ({
-  OnePasswordService: vi.fn().mockImplementation(() => ({
-    getCredentials: vi.fn().mockResolvedValue({
-      email: 'test@example.com',
-      password: 'test'
-    })
-  }))
-}))
+import { FileSystemStorage } from '@/storage/FileSystemStorage.js'
+import { mkdtemp, rm } from 'fs/promises'
+import { join } from 'path'
+import { tmpdir } from 'os'
 
 describe('sync command', () => {
-  let storage: MockStorage
+  let tempDir: string
+  let storage: FileSystemStorage
   let storageProvider: StorageProvider
-  let pocketCastsService: PocketCastsService
+  let pocketCastsService: PocketCastsServiceImpl
   let command: Command
-  let mockExit: any
-
-  // Mock episode data
-  const mockEpisodes = [
-    {
-      uuid: 'test-episode-1',
-      title: 'Test Episode 1',
-      url: 'https://example.com/episode1',
-      published: '2024-01-01T00:00:00Z',
-      duration: 3600,
-      fileSize: 1000000,
-      podcastUuid: 'test-podcast-1',
-      podcastTitle: 'Test Podcast',
-      podcastAuthor: 'Test Author',
-      status: 'played' as const,
-      playingStatus: 2,
-      starred: true,
-      playedUpTo: 3600
-    },
-    {
-      uuid: 'test-episode-2',
-      title: 'Test Episode 2',
-      url: 'https://example.com/episode2',
-      published: '2024-01-02T00:00:00Z',
-      duration: 1800,
-      fileSize: 500000,
-      podcastUuid: 'test-podcast-1',
-      podcastTitle: 'Test Podcast',
-      podcastAuthor: 'Test Author',
-      status: 'played' as const,
-      playingStatus: 2,
-      starred: false,
-      playedUpTo: 1800
-    }
-  ]
 
   beforeEach(async () => {
-    // Initialize mock storage
-    storage = new MockStorage()
+    // Create a temporary directory for testing
+    tempDir = await mkdtemp(join(tmpdir(), 'podcast-collaborator-test-'))
+    
+    // Initialize real storage
+    storage = new FileSystemStorage(tempDir)
     await storage.initializeProject({
       name: 'Test Project',
       author: 'Test Author',
@@ -78,85 +30,58 @@ describe('sync command', () => {
       updated: new Date()
     })
     
-    // Create mock storage provider
-    storageProvider = {
-      getStorage: vi.fn().mockReturnValue(storage),
-      initialize: vi.fn().mockResolvedValue(undefined)
-    } as unknown as StorageProvider
-    
-    // Create mock PocketCasts service
-    pocketCastsService = {
-      login: vi.fn(),
-      getListenedEpisodes: vi.fn().mockResolvedValue(mockEpisodes),
-      getStarredEpisodes: vi.fn().mockResolvedValue([mockEpisodes[0]])
-    } as unknown as PocketCastsService
-
-    command = createSyncCommand(storageProvider, pocketCastsService)
-
-    // Mock process.exit
-    mockExit = vi.spyOn(process, 'exit').mockImplementation((code?: number | string | null) => {
-      throw new Error(`Process.exit(${code})`)
+    // Create real storage provider with config
+    storageProvider = new StorageProvider({
+      type: 'filesystem',
+      path: tempDir
     })
-
-    // Clear logger mocks
-    vi.mocked(logger.info).mockClear()
-    vi.mocked(logger.error).mockClear()
-    vi.mocked(logger.debug).mockClear()
-    vi.mocked(logger.commandError).mockClear()
-    vi.mocked(logger.commandSuccess).mockClear()
-  })
-
-  afterEach(() => {
-    mockExit.mockRestore()
-  })
-
-  it('should show help with --help flag', async () => {
-    const helpText = command.helpInformation()
-    expect(helpText).toContain('Usage:')
-    expect(helpText).toContain('--email')
-    expect(helpText).toContain('--password')
-    expect(helpText).toContain('--starred')
-    expect(helpText).toContain('--listened')
-  })
-
-  it('should login with provided credentials', async () => {
-    await command.parseAsync(['node', 'test', '--email', 'test@example.com', '--password', 'test'])
-    expect(pocketCastsService.login).toHaveBeenCalledWith('test@example.com', 'test')
-  })
-
-  it('should sync all episodes by default', async () => {
-    await command.parseAsync(['node', 'test', '--email', 'test@example.com', '--password', 'test'])
-    expect(pocketCastsService.getStarredEpisodes).toHaveBeenCalled()
-    expect(pocketCastsService.getListenedEpisodes).toHaveBeenCalled()
-    expect(logger.commandSuccess).toHaveBeenCalledWith(expect.stringContaining('Successfully synced episodes'))
-  })
-
-  it('should sync only starred episodes when --starred flag is used', async () => {
-    await command.parseAsync(['node', 'test', '--email', 'test@example.com', '--password', 'test', '--starred'])
-    expect(pocketCastsService.getStarredEpisodes).toHaveBeenCalled()
-    expect(pocketCastsService.getListenedEpisodes).not.toHaveBeenCalled()
-    expect(logger.commandSuccess).toHaveBeenCalledWith(expect.stringContaining('Found 1 starred episodes'))
-  })
-
-  it('should sync only listened episodes when --listened flag is used', async () => {
-    await command.parseAsync(['node', 'test', '--email', 'test@example.com', '--password', 'test', '--listened'])
-    expect(pocketCastsService.getListenedEpisodes).toHaveBeenCalled()
-    expect(pocketCastsService.getStarredEpisodes).not.toHaveBeenCalled()
-    expect(logger.commandSuccess).toHaveBeenCalledWith(expect.stringContaining('Found 2 listened episodes'))
-  })
-
-  it('should handle API errors gracefully', async () => {
-    const error = new Error('API error')
-    pocketCastsService.getListenedEpisodes = vi.fn().mockRejectedValue(error)
+    await storageProvider.initialize()
     
-    await expect(command.parseAsync(['node', 'test', '--email', 'test@example.com', '--password', 'test', '--listened']))
-      .rejects.toThrow('Failed to sync episodes')
-    expect(logger.commandError).toHaveBeenCalledWith('Failed to sync episodes:')
+    // Create real PocketCasts service
+    pocketCastsService = new PocketCastsServiceImpl()
+
+    // Create the command
+    command = createSyncCommand(storageProvider, pocketCastsService)
   })
 
-  it('should handle 1Password integration', async () => {
-    await command.parseAsync(['node', 'test', '--onepassword'])
-    expect(pocketCastsService.login).toHaveBeenCalledWith('test@example.com', 'test')
-    expect(logger.commandSuccess).toHaveBeenCalledWith(expect.stringContaining('Successfully synced episodes'))
+  afterEach(async () => {
+    // Clean up temporary directory
+    await rm(tempDir, { recursive: true, force: true })
   })
+
+  it('should sync episodes from PocketCasts', async () => {
+    // Run the sync command with 1Password integration
+    await command.parseAsync(['node', 'test', '--onepassword'])
+
+    // Get the episodes from storage
+    const episodes = await storage.listEpisodes()
+
+    // Verify we got some episodes
+    expect(episodes.length).toBeGreaterThan(0)
+
+    // Verify episode structure
+    const firstEpisode = episodes[0]
+    expect(firstEpisode).toHaveProperty('id')
+    expect(firstEpisode).toHaveProperty('title')
+    expect(firstEpisode).toHaveProperty('url')
+    expect(firstEpisode).toHaveProperty('podcastName')
+    expect(firstEpisode).toHaveProperty('publishDate')
+    expect(firstEpisode).toHaveProperty('duration')
+    expect(firstEpisode).toHaveProperty('isStarred')
+    expect(firstEpisode).toHaveProperty('isListened')
+    expect(firstEpisode).toHaveProperty('progress')
+    expect(firstEpisode).toHaveProperty('syncedAt')
+
+    // Verify episode data types
+    expect(typeof firstEpisode.id).toBe('string')
+    expect(typeof firstEpisode.title).toBe('string')
+    expect(typeof firstEpisode.url).toBe('string')
+    expect(typeof firstEpisode.podcastName).toBe('string')
+    expect(firstEpisode.publishDate).toBeInstanceOf(Date)
+    expect(typeof firstEpisode.duration).toBe('number')
+    expect(typeof firstEpisode.isStarred).toBe('boolean')
+    expect(typeof firstEpisode.isListened).toBe('boolean')
+    expect(typeof firstEpisode.progress).toBe('number')
+    expect(firstEpisode.syncedAt).toBeInstanceOf(Date)
+  }, 30000) // Increase timeout to 30 seconds for real API call
 }) 

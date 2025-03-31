@@ -1,0 +1,18 @@
+{
+  "episodes": [
+    {
+      "uuid": "1",
+      "title": "Episode 1",
+      "url": "https://example.com/1",
+      "published": "2024-01-01T00:00:00Z",
+      "duration": 3600,
+      "fileSize": 1000000,
+      "podcastUuid": "podcast-1",
+      "podcastTitle": "Test Podcast",
+      "status": "played",
+      "playingStatus": 2,
+      "starred": true,
+      "playedUpTo": 3600
+    }
+  ]
+} 

@@ -1,17 +1,9 @@
 import { z } from 'zod'
 import { Episode } from '@/storage/interfaces.js'
 
-// Types
-export interface PocketCastsEpisodeMetadata {
-  podcastUuid: string
-  podcastTitle: string
-  status: 'unplayed' | 'played'
-  playingStatus: number
-  starred: boolean
-  playedUpTo: number
-  url: string
-  duration: number
-  fileSize: number
+// Raw API response types
+export interface PocketCastsResponse {
+  episodes: PocketCastsEpisode[]
 }
 
 export interface PocketCastsEpisode {
@@ -20,33 +12,38 @@ export interface PocketCastsEpisode {
   url: string
   published: string
   duration: number
-  fileSize: number
+  fileSize?: number
   podcastUuid: string
   podcastTitle: string
-  status: 'unplayed' | 'played'
+  status?: 'unplayed' | 'played'
   playingStatus: number
   starred: boolean
   playedUpTo: number
 }
 
-const PocketCastsAuthSchema = z.object({
-  token: z.string(),
-  email: z.string().email()
-})
-
-const PocketCastsEpisodeSchema = z.object({
+// Zod schemas for runtime validation
+export const PocketCastsEpisodeSchema = z.object({
   uuid: z.string(),
   title: z.string(),
   url: z.string().url(),
   published: z.string(),
   duration: z.number(),
-  fileSize: z.number(),
+  fileSize: z.number().optional(),
   podcastUuid: z.string(),
   podcastTitle: z.string(),
-  status: z.enum(['unplayed', 'played']),
+  status: z.enum(['unplayed', 'played']).optional(),
   playingStatus: z.number(),
   starred: z.boolean(),
   playedUpTo: z.number()
+})
+
+export const PocketCastsResponseSchema = z.object({
+  episodes: z.array(PocketCastsEpisodeSchema)
+})
+
+export const PocketCastsAuthSchema = z.object({
+  token: z.string(),
+  email: z.string().email()
 })
 
 export interface PocketCastsService {
@@ -82,9 +79,11 @@ export class PocketCastsServiceImpl implements PocketCastsService {
       headers
     })
     
+    const rawText = await response.text()
+    console.log('Raw API response:', rawText)
+    
     let data: any
     const contentType = response.headers.get('content-type')
-    const rawText = await response.text()
     
     try {
       // Only try to parse JSON if the content-type is application/json
@@ -151,44 +150,48 @@ export class PocketCastsServiceImpl implements PocketCastsService {
   }
 
   async getListenedEpisodes(): Promise<PocketCastsEpisode[]> {
-    const data = await this.request<{ episodes: PocketCastsEpisode[] }>('/user/history', {
+    const data = await this.request<PocketCastsResponse>('/user/history', {
       method: 'POST',
       body: JSON.stringify({})
     })
-    return data.episodes || []
+    // Validate response
+    const validated = PocketCastsResponseSchema.parse(data)
+    return validated.episodes
   }
 
   async getStarredEpisodes(): Promise<PocketCastsEpisode[]> {
-    const data = await this.request<{ episodes: PocketCastsEpisode[] }>('/user/starred', {
+    const data = await this.request<PocketCastsResponse>('/user/starred', {
       method: 'POST',
       body: JSON.stringify({})
     })
-    return data.episodes || []
+    // Validate response
+    const validated = PocketCastsResponseSchema.parse(data)
+    return validated.episodes
   }
 
   static convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Episode {
+    // Validate input
+    const validated = PocketCastsEpisodeSchema.parse(pocketcastsEpisode)
+    
+    // Calculate progress, ensuring it's between 0 and 1
+    const progress = validated.duration > 0 
+      ? Math.min(1, Math.max(0, validated.playedUpTo / validated.duration))
+      : 0
+    
     return {
-      id: pocketcastsEpisode.uuid,
-      title: pocketcastsEpisode.title,
-      number: 0, // We don't have episode numbers from PocketCasts
-      status: 'published', // All episodes from PocketCasts are published
-      created: new Date(),
-      updated: new Date(),
-      description: '', // PocketCasts API doesn't provide description in episode list
-      publishDate: new Date(pocketcastsEpisode.published),
-      metadata: {
-        pocketcasts: {
-          podcastUuid: pocketcastsEpisode.podcastUuid,
-          podcastTitle: pocketcastsEpisode.podcastTitle,
-          status: pocketcastsEpisode.status,
-          playingStatus: pocketcastsEpisode.playingStatus,
-          starred: pocketcastsEpisode.starred,
-          playedUpTo: pocketcastsEpisode.playedUpTo,
-          url: pocketcastsEpisode.url,
-          duration: pocketcastsEpisode.duration,
-          fileSize: pocketcastsEpisode.fileSize
-        } as PocketCastsEpisodeMetadata
-      }
+      id: validated.uuid,
+      title: validated.title,
+      url: validated.url,
+      podcastName: validated.podcastTitle,
+      publishDate: new Date(validated.published),
+      duration: validated.duration,
+      isStarred: validated.starred,
+      isListened: validated.status === 'played' || validated.playedUpTo > 0,
+      progress,
+      lastListenedAt: validated.playedUpTo > 0 ? new Date() : undefined,
+      syncedAt: new Date(),
+      isDownloaded: false,
+      hasTranscript: false
     }
   }
 } 

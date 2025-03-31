@@ -7,11 +7,10 @@
   "types": "dist/index.d.ts",
   "bin": {
     "podcast-collaborator": "./dist/index.js",
-    "podcast-cli": "./dist/cli.js"
+    "podcast-cli": "./dist/index.js"
   },
   "scripts": {
     "dev": "tsx watch src/index.tsx",
-    "run-once": "tsx src/cli.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",

@@ -21,35 +21,49 @@ export const ProjectConfigSchema = z.object({
 
 // Episode
 export interface Episode {
-  id: string
+  // Core fields from PocketCasts
+  id: string                // maps from uuid
   title: string
   url: string
-  podcastName: string
-  podcastAuthor: string
-  description?: string
-  publishDate?: Date
-  duration?: number
-  isStarred: boolean
-  isListened: boolean
-  progress?: number
-  notes?: string
-  syncedAt: Date
+  podcastName: string      // maps from podcastTitle
+  publishDate: Date        // maps from published
+  duration: number
+  
+  // Status fields from PocketCasts
+  isStarred: boolean       // maps from starred
+  isListened: boolean      // maps from status === 'played'
+  progress: number         // maps from playedUpTo / duration
+  lastListenedAt?: Date    // derived from playedUpTo > 0
+  
+  // Our additional fields
+  description?: string     // not provided by PocketCasts API
+  notes?: string          // our own notes
+  syncedAt: Date          // when we last synced
+  isDownloaded: boolean   // our download status
+  hasTranscript: boolean  // our transcript status
 }
 
 export const EpisodeSchema = z.object({
+  // Core fields from PocketCasts
   id: z.string().min(1),
   title: z.string().min(1),
   url: z.string().url(),
   podcastName: z.string().min(1),
-  podcastAuthor: z.string().min(1),
-  description: z.string().optional(),
-  publishDate: z.date().optional(),
-  duration: z.number().optional(),
+  publishDate: z.date(),
+  duration: z.number().min(0),
+  
+  // Status fields from PocketCasts
   isStarred: z.boolean(),
   isListened: z.boolean(),
-  progress: z.number().min(0).max(1).optional(),
+  progress: z.number().min(0).max(1),
+  lastListenedAt: z.date().optional(),
+  
+  // Our additional fields
+  description: z.string().optional(),
   notes: z.string().optional(),
-  syncedAt: z.date()
+  syncedAt: z.date(),
+  isDownloaded: z.boolean(),
+  hasTranscript: z.boolean()
 })
 
 // Asset (for downloaded content)

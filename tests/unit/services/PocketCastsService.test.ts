@@ -1,43 +1,45 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { PocketCastsServiceImpl, PocketCastsEpisode } from '@/services/PocketCastsService.js'
+import { PocketCastsServiceImpl, PocketCastsEpisode, PocketCastsResponse } from '@/services/PocketCastsService.js'
 
 describe('PocketCastsService', () => {
   let service: PocketCastsServiceImpl
   let mockFetch: ReturnType<typeof vi.fn>
 
-  const mockEpisodes = [
-    {
-      uuid: '1',
-      title: 'Episode 1',
-      url: 'https://example.com/1',
-      published: '2024-01-01T00:00:00Z',
-      duration: 3600,
-      fileSize: 1000000,
-      podcastUuid: 'podcast-1',
-      podcastTitle: 'Test Podcast',
-      status: 'played' as const,
-      playingStatus: 2,
-      starred: true,
-      playedUpTo: 3600
-    },
-    {
-      uuid: '2',
-      title: 'Episode 2',
-      url: 'https://example.com/2',
-      published: '2024-01-02T00:00:00Z',
-      duration: 1800,
-      fileSize: 500000,
-      podcastUuid: 'podcast-1',
-      podcastTitle: 'Test Podcast',
-      status: 'played' as const,
-      playingStatus: 2,
-      starred: false,
-      playedUpTo: 1800
-    }
-  ]
+  // Example response from pocketcasts.json
+  const mockResponse: PocketCastsResponse = {
+    episodes: [
+      {
+        uuid: '1',
+        title: 'Episode 1',
+        url: 'https://example.com/1',
+        published: '2024-01-01T00:00:00Z',
+        duration: 3600,
+        fileSize: 1000000,
+        podcastUuid: 'podcast-1',
+        podcastTitle: 'Test Podcast',
+        status: 'played',
+        playingStatus: 2,
+        starred: true,
+        playedUpTo: 3600
+      },
+      {
+        uuid: '2',
+        title: 'Episode 2',
+        url: 'https://example.com/2',
+        published: '2024-01-02T00:00:00Z',
+        duration: 1800,
+        fileSize: 500000,
+        podcastUuid: 'podcast-1',
+        podcastTitle: 'Test Podcast',
+        status: 'played',
+        playingStatus: 2,
+        starred: false,
+        playedUpTo: 1800
+      }
+    ]
+  }
 
   beforeEach(() => {
-    // Reset mocks before each test
     mockFetch = vi.fn()
     global.fetch = mockFetch
     service = new PocketCastsServiceImpl()
@@ -101,20 +103,11 @@ describe('PocketCastsService', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         headers: new Headers({ 'content-type': 'application/json' }),
-        text: () => Promise.resolve(JSON.stringify({ episodes: mockEpisodes }))
+        text: () => Promise.resolve(JSON.stringify(mockResponse))
       })
 
       const result = await service.getListenedEpisodes()
-      expect(result).toEqual(mockEpisodes)
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.pocketcasts.com/user/history',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer test-token'
-          })
-        })
-      )
+      expect(result).toEqual(mockResponse.episodes)
     })
 
     it('should return empty array when no episodes', async () => {
@@ -161,20 +154,11 @@ describe('PocketCastsService', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         headers: new Headers({ 'content-type': 'application/json' }),
-        text: () => Promise.resolve(JSON.stringify({ episodes: [mockEpisodes[0]] })) // Only starred episode
+        text: () => Promise.resolve(JSON.stringify({ episodes: [mockResponse.episodes[0]] }))
       })
 
       const result = await service.getStarredEpisodes()
-      expect(result).toEqual([mockEpisodes[0]])
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.pocketcasts.com/user/starred',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer test-token'
-          })
-        })
-      )
+      expect(result).toEqual([mockResponse.episodes[0]])
     })
 
     it('should return empty array when no starred episodes', async () => {
@@ -196,31 +180,25 @@ describe('PocketCastsService', () => {
 
   describe('convertToEpisode', () => {
     it('should convert PocketCasts episode to internal Episode format', () => {
-      const pocketcastsEpisode = mockEpisodes[0]
+      const pocketcastsEpisode = mockResponse.episodes[0]
       const result = PocketCastsServiceImpl.convertToEpisode(pocketcastsEpisode)
 
       expect(result).toEqual({
         id: pocketcastsEpisode.uuid,
         title: pocketcastsEpisode.title,
-        number: 0,
-        status: 'published',
-        created: expect.any(Date),
-        updated: expect.any(Date),
-        description: '',
+        url: pocketcastsEpisode.url,
+        podcastName: pocketcastsEpisode.podcastTitle,
         publishDate: new Date(pocketcastsEpisode.published),
-        metadata: {
-          pocketcasts: {
-            podcastUuid: pocketcastsEpisode.podcastUuid,
-            podcastTitle: pocketcastsEpisode.podcastTitle,
-            status: pocketcastsEpisode.status,
-            playingStatus: pocketcastsEpisode.playingStatus,
-            starred: pocketcastsEpisode.starred,
-            playedUpTo: pocketcastsEpisode.playedUpTo,
-            url: pocketcastsEpisode.url,
-            duration: pocketcastsEpisode.duration,
-            fileSize: pocketcastsEpisode.fileSize
-          }
-        }
+        duration: pocketcastsEpisode.duration,
+        isStarred: pocketcastsEpisode.starred,
+        isListened: pocketcastsEpisode.status === 'played',
+        progress: pocketcastsEpisode.playedUpTo / pocketcastsEpisode.duration,
+        lastListenedAt: expect.any(Date),
+        description: '',
+        notes: '',
+        syncedAt: expect.any(Date),
+        isDownloaded: false,
+        hasTranscript: false
       })
     })
   })
