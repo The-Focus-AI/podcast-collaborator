@@ -278,3 +278,42 @@ describe('Component', () => {
 - README for each directory
 - Inline comments for complex logic
 - Architecture decision records 
+
+# Logger Utility Patterns
+
+## Usage
+The logger utility provides both a default instance and the ability to create custom instances:
+
+```typescript
+// Using default instance
+import { logger } from '@/utils/logger'
+logger.info('message')
+
+// Creating custom instance
+import { Logger } from '@/utils/logger'
+const customLogger = new Logger({ timestamp: true })
+```
+
+## Log Levels
+- `info`: Standard information (default color)
+- `success`: Success messages (green)
+- `warning`: Warning messages (yellow)
+- `error`: Error messages (red)
+- `debug`: Debug messages (gray, only shown when DEBUG=true)
+
+## Command Helpers
+Special formatters for CLI output:
+- `commandOutput`: Arrow prefix (→)
+- `commandSuccess`: Checkmark prefix (✓)
+- `commandError`: Cross prefix (✗)
+- `commandWarning`: Warning prefix (⚠)
+
+## Options
+- `timestamp`: Add ISO timestamp prefix
+- `prefix`: Add custom prefix
+- `json`: Output in JSON format
+
+## Error Handling
+- Gracefully handles circular references
+- Properly formats Error objects
+- Supports various input types (strings, objects, arrays) 

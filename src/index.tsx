@@ -18,7 +18,9 @@ async function main() {
     const result = await app.run(args);
 
     if (!result.success) {
-      console.error(result.error);
+      // Handle both message and error properties
+      const errorMessage = result.message || result.error || 'Command failed';
+      console.error(errorMessage);
       process.exit(1);
     }
 
@@ -27,8 +29,13 @@ async function main() {
       console.log(result.output);
     }
 
+    // If we have a success message, show it
+    if (result.message) {
+      console.log(result.message);
+    }
+
     // If no output and success, just exit
-    if (!result.output) {
+    if (!result.output && !result.message) {
       process.exit(0);
     }
   } catch (error) {

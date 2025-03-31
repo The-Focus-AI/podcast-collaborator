@@ -6,11 +6,12 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "podcast-collaborator": "./dist/index.js"
+    "podcast-collaborator": "./dist/index.js",
+    "podcast-cli": "./dist/cli.js"
   },
   "scripts": {
     "dev": "tsx watch src/index.tsx",
-    "run-once": "tsx src/index.tsx",
+    "run-once": "tsx src/cli.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
@@ -35,6 +36,8 @@
   "devDependencies": {
     "@eslint/js": "^9.23.0",
     "@testing-library/react": "^16.2.0",
+    "@types/chalk": "^2.2.4",
+    "@types/commander": "^2.12.5",
     "@types/node": "^22.13.14",
     "@types/react": "^19.0.12",
     "@typescript-eslint/eslint-plugin": "^8.28.0",
@@ -53,6 +56,8 @@
     "vitest": "^3.0.9"
   },
   "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
     "ink": "^5.2.0",
     "react": "18.2.0",
     "zod": "^3.24.2"

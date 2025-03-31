@@ -18,6 +18,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["src/**/*", "tests/**/*", "*.config.ts", "*.config.js"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/cli.ts", "tests/**/*", "*.config.ts", "*.config.js"],
   "exclude": ["node_modules", "dist"]
 } 
