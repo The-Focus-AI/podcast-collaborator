@@ -2,11 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createSyncCommand } from '@/cli/commands/sync.js'
 import { StorageProvider } from '@/storage/StorageProvider.js'
 import { PocketCastsService } from '@/services/PocketCastsService.js'
-import { mkdir, rm, mkdtemp } from 'fs/promises'
-import { join } from 'path'
-import { tmpdir } from 'os'
 import { Command } from 'commander'
 import { logger } from '@/utils/logger.js'
+import { MockStorage } from '@/storage/MockStorage.js'
 
 vi.mock('@/utils/logger.js', () => ({
   logger: {
@@ -28,7 +26,7 @@ vi.mock('@/services/OnePasswordService.js', () => ({
 }))
 
 describe('sync command', () => {
-  let testDir: string
+  let storage: MockStorage
   let storageProvider: StorageProvider
   let pocketCastsService: PocketCastsService
   let command: Command
@@ -45,6 +43,7 @@ describe('sync command', () => {
       fileSize: 1000000,
       podcastUuid: 'test-podcast-1',
       podcastTitle: 'Test Podcast',
+      podcastAuthor: 'Test Author',
       status: 'played' as const,
       playingStatus: 2,
       starred: true,
@@ -59,6 +58,7 @@ describe('sync command', () => {
       fileSize: 500000,
       podcastUuid: 'test-podcast-1',
       podcastTitle: 'Test Podcast',
+      podcastAuthor: 'Test Author',
       status: 'played' as const,
       playingStatus: 2,
       starred: false,
@@ -67,10 +67,22 @@ describe('sync command', () => {
   ]
 
   beforeEach(async () => {
-    testDir = await mkdtemp(join(tmpdir(), 'podcast-test-'))
+    // Initialize mock storage
+    storage = new MockStorage()
+    await storage.initializeProject({
+      name: 'Test Project',
+      author: 'Test Author',
+      email: 'test@example.com',
+      description: 'Test Description',
+      created: new Date(),
+      updated: new Date()
+    })
     
-    // Initialize storage provider with test directory
-    storageProvider = new StorageProvider({ type: 'filesystem', path: testDir })
+    // Create mock storage provider
+    storageProvider = {
+      getStorage: vi.fn().mockReturnValue(storage),
+      initialize: vi.fn().mockResolvedValue(undefined)
+    } as unknown as StorageProvider
     
     // Create mock PocketCasts service
     pocketCastsService = {
@@ -80,16 +92,6 @@ describe('sync command', () => {
     } as unknown as PocketCastsService
 
     command = createSyncCommand(storageProvider, pocketCastsService)
-
-    // Initialize project
-    const storage = storageProvider.getStorage()
-    await storage.initializeProject({
-      name: 'Test Project',
-      author: 'Test Author',
-      email: 'test@example.com',
-      created: new Date(),
-      updated: new Date()
-    })
 
     // Mock process.exit
     mockExit = vi.spyOn(process, 'exit').mockImplementation((code?: number | string | null) => {
@@ -104,13 +106,8 @@ describe('sync command', () => {
     vi.mocked(logger.commandSuccess).mockClear()
   })
 
-  afterEach(async () => {
-    try {
-      await rm(testDir, { recursive: true, force: true })
-      mockExit.mockRestore()
-    } catch (error) {
-      console.warn('Failed to cleanup test directory:', error)
-    }
+  afterEach(() => {
+    mockExit.mockRestore()
   })
 
   it('should show help with --help flag', async () => {
@@ -120,16 +117,6 @@ describe('sync command', () => {
     expect(helpText).toContain('--password')
     expect(helpText).toContain('--starred')
     expect(helpText).toContain('--listened')
-  })
-
-  it('should fail if project is not initialized', async () => {
-    // Create a new provider with uninitialized storage
-    const uninitializedProvider = new StorageProvider({ type: 'filesystem', path: await mkdtemp(join(tmpdir(), 'podcast-test-')) })
-    const uninitializedCommand = createSyncCommand(uninitializedProvider, pocketCastsService)
-    
-    await expect(uninitializedCommand.parseAsync(['node', 'test', '--email', 'test@example.com', '--password', 'test']))
-      .rejects.toThrow('Project not initialized')
-    expect(logger.commandError).toHaveBeenCalledWith('Project not initialized. Run "podcast-cli init" first.')
   })
 
   it('should login with provided credentials', async () => {

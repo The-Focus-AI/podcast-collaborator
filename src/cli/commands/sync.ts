@@ -1,8 +1,9 @@
 import { Command } from 'commander'
 import { StorageProvider } from '../../storage/StorageProvider.js'
-import { PocketCastsService } from '../../services/PocketCastsService.js'
+import { PocketCastsService, PocketCastsEpisode } from '../../services/PocketCastsService.js'
 import { logger } from '../../utils/logger.js'
 import { OnePasswordService } from '../../services/OnePasswordService.js'
+import { Episode } from '../../storage/interfaces.js'
 
 interface SyncOptions {
   email?: string
@@ -10,6 +11,23 @@ interface SyncOptions {
   starred?: boolean
   listened?: boolean
   onepassword?: boolean
+}
+
+function convertPocketCastsEpisode(episode: PocketCastsEpisode, isStarred: boolean, isListened: boolean): Episode {
+  return {
+    id: episode.uuid,
+    title: episode.title,
+    url: episode.url,
+    podcastName: episode.podcastTitle,
+    podcastAuthor: '', // PocketCasts API doesn't provide author info
+    description: '', // PocketCasts API doesn't provide description in episode list
+    publishDate: new Date(episode.published),
+    duration: episode.duration,
+    isStarred,
+    isListened,
+    progress: episode.playedUpTo / episode.duration,
+    syncedAt: new Date()
+  }
 }
 
 export function createSyncCommand(
@@ -26,12 +44,7 @@ export function createSyncCommand(
     .action(async (options: SyncOptions) => {
       try {
         const storage = storageProvider.getStorage()
-
-        // Check if project is initialized
-        if (!(await storage.isInitialized())) {
-          logger.commandError('Project not initialized. Run "podcast-cli init" first.')
-          throw new Error('Project not initialized')
-        }
+        await storageProvider.initialize()
 
         let email = options.email
         let password = options.password
@@ -70,16 +83,28 @@ export function createSyncCommand(
           if (options.starred) {
             const episodes = await pocketCastsService.getStarredEpisodes()
             logger.commandSuccess(`Found ${episodes.length} starred episodes`)
-            // TODO: Save episodes to storage
+            // Save episodes to storage
+            for (const episode of episodes) {
+              await storage.saveEpisode(convertPocketCastsEpisode(episode, true, false))
+            }
           } else if (options.listened) {
             const episodes = await pocketCastsService.getListenedEpisodes()
             logger.commandSuccess(`Found ${episodes.length} listened episodes`)
-            // TODO: Save episodes to storage
+            // Save episodes to storage
+            for (const episode of episodes) {
+              await storage.saveEpisode(convertPocketCastsEpisode(episode, false, true))
+            }
           } else {
             const starredEpisodes = await pocketCastsService.getStarredEpisodes()
             const listenedEpisodes = await pocketCastsService.getListenedEpisodes()
             logger.commandSuccess(`Found ${starredEpisodes.length} starred and ${listenedEpisodes.length} listened episodes`)
-            // TODO: Save episodes to storage
+            // Save all episodes to storage
+            for (const episode of starredEpisodes) {
+              await storage.saveEpisode(convertPocketCastsEpisode(episode, true, false))
+            }
+            for (const episode of listenedEpisodes) {
+              await storage.saveEpisode(convertPocketCastsEpisode(episode, false, true))
+            }
           }
         } catch (error) {
           logger.commandError('Failed to sync episodes:')

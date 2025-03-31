@@ -29,7 +29,7 @@ export class MockStorage implements PodcastStorage {
   }
 
   // Episode Storage Implementation
-  async createEpisode(episode: Episode): Promise<void> {
+  async saveEpisode(episode: Episode): Promise<void> {
     if (!this.projectConfig) {
       throw new Error('Project not initialized')
     }
@@ -73,18 +73,18 @@ export class MockStorage implements PodcastStorage {
   }
 
   // Asset Storage Implementation
-  async saveAsset(asset: Asset): Promise<void> {
+  async saveAsset(episodeId: string, asset: Asset): Promise<void> {
     if (!this.projectConfig) {
       throw new Error('Project not initialized')
     }
-    this.assets.set(`${asset.episodeId}:${asset.id}`, asset)
+    this.assets.set(`${episodeId}:${asset.name}`, asset)
   }
 
-  async getAsset(episodeId: string, assetId: string): Promise<Asset> {
+  async getAsset(episodeId: string, name: string): Promise<Asset> {
     if (!this.projectConfig) {
       throw new Error('Project not initialized')
     }
-    const asset = this.assets.get(`${episodeId}:${assetId}`)
+    const asset = this.assets.get(`${episodeId}:${name}`)
     if (!asset) {
       throw new Error('Asset not found')
     }
@@ -95,15 +95,16 @@ export class MockStorage implements PodcastStorage {
     if (!this.projectConfig) {
       throw new Error('Project not initialized')
     }
-    return Array.from(this.assets.values())
-      .filter(asset => asset.episodeId === episodeId)
+    return Array.from(this.assets.entries())
+      .filter(([key]) => key.startsWith(`${episodeId}:`))
+      .map(([, asset]) => asset)
   }
 
-  async deleteAsset(episodeId: string, assetId: string): Promise<void> {
+  async deleteAsset(episodeId: string, name: string): Promise<void> {
     if (!this.projectConfig) {
       throw new Error('Project not initialized')
     }
-    const key = `${episodeId}:${assetId}`
+    const key = `${episodeId}:${name}`
     if (!this.assets.has(key)) {
       throw new Error('Asset not found')
     }

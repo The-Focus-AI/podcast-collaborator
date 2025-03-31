@@ -23,52 +23,48 @@ export const ProjectConfigSchema = z.object({
 export interface Episode {
   id: string
   title: string
-  number: number
-  status: 'draft' | 'in-progress' | 'ready' | 'published'
-  created: Date
-  updated: Date
+  url: string
+  podcastName: string
+  podcastAuthor: string
   description?: string
   publishDate?: Date
+  duration?: number
+  isStarred: boolean
+  isListened: boolean
+  progress?: number
   notes?: string
-  transcript?: string
-  metadata?: Record<string, unknown>
+  syncedAt: Date
 }
 
 export const EpisodeSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
-  number: z.number().int().min(0),
-  status: z.enum(['draft', 'in-progress', 'ready', 'published']),
-  created: z.date(),
-  updated: z.date(),
+  url: z.string().url(),
+  podcastName: z.string().min(1),
+  podcastAuthor: z.string().min(1),
   description: z.string().optional(),
   publishDate: z.date().optional(),
+  duration: z.number().optional(),
+  isStarred: z.boolean(),
+  isListened: z.boolean(),
+  progress: z.number().min(0).max(1).optional(),
   notes: z.string().optional(),
-  transcript: z.string().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional()
+  syncedAt: z.date()
 })
 
-// Asset
+// Asset (for downloaded content)
 export interface Asset {
-  id: string
-  episodeId: string
-  type: string
+  type: string // 'audio', 'image', etc.
   name: string
   data: Buffer
-  created: Date
-  updated: Date
-  metadata?: Record<string, unknown>
+  downloadedAt: Date
 }
 
 export const AssetSchema = z.object({
-  id: z.string().min(1),
-  episodeId: z.string().min(1),
   type: z.string().min(1),
   name: z.string().min(1),
   data: z.instanceof(Buffer),
-  created: z.date(),
-  updated: z.date(),
-  metadata: z.record(z.string(), z.unknown()).optional()
+  downloadedAt: z.date()
 })
 
 // Project Storage Interface
@@ -81,7 +77,7 @@ export interface ProjectStorage {
 
 // Episode Storage Interface
 export interface EpisodeStorage {
-  createEpisode(episode: Episode): Promise<void>
+  saveEpisode(episode: Episode): Promise<void>
   getEpisode(id: string): Promise<Episode>
   listEpisodes(): Promise<Episode[]>
   updateEpisode(id: string, episode: Partial<Episode>): Promise<void>
@@ -90,13 +86,17 @@ export interface EpisodeStorage {
 
 // Asset Storage Interface
 export interface AssetStorage {
-  saveAsset(asset: Asset): Promise<void>
-  getAsset(episodeId: string, id: string): Promise<Asset>
+  saveAsset(episodeId: string, asset: Asset): Promise<void>
+  getAsset(episodeId: string, name: string): Promise<Asset>
   listAssets(episodeId: string): Promise<Asset[]>
-  deleteAsset(episodeId: string, id: string): Promise<void>
+  deleteAsset(episodeId: string, name: string): Promise<void>
 }
 
 // Combined interface
-export interface PodcastStorage extends ProjectStorage, EpisodeStorage, AssetStorage {
+export interface PodcastStorage extends EpisodeStorage, AssetStorage {
   // Additional methods can be added here if needed
+  initializeProject(config: ProjectConfig): Promise<void>
+  getProjectConfig(): Promise<ProjectConfig>
+  updateProjectConfig(config: Partial<ProjectConfig>): Promise<void>
+  isInitialized(): Promise<boolean>
 } 

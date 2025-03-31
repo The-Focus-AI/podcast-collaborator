@@ -1,5 +1,4 @@
 import { Command } from 'commander';
-import { createInitCommand } from './cli/commands/init.js';
 import { createSyncCommand } from './cli/commands/sync.js';
 import { createVersionCommand } from './cli/commands/version.js';
 import { StorageProvider } from './storage/StorageProvider.js';
@@ -22,14 +21,13 @@ export class App {
     this.pocketCastsService = new PocketCastsServiceImpl();
     
     // Add commands
-    this.program.addCommand(createInitCommand(this.storageProvider));
     this.program.addCommand(createSyncCommand(this.storageProvider, this.pocketCastsService));
     this.program.addCommand(createVersionCommand());
 
     // Add global options
     this.program
       .name('podcast-collaborator')
-      .description('A tool for collaborating on podcast episodes')
+      .description('A tool for syncing podcasts from PocketCasts')
       .version('1.0.0');
 
     // Add error handler
@@ -65,11 +63,11 @@ export class App {
 
         // Handle specific command errors
         const knownErrors = [
-          'Project not initialized',
-          'Failed to initialize project',
           'Failed to sync episodes',
           'Failed to read package.json',
-          'Invalid credentials or session expired'
+          'Invalid credentials or session expired',
+          'Failed to get credentials from 1Password',
+          'Missing credentials'
         ];
 
         for (const knownError of knownErrors) {
@@ -83,7 +81,8 @@ export class App {
         }
 
         // Handle unknown errors
-        logger.commandError('An unexpected error occurred:', error);
+        logger.commandError('An unexpected error occurred');
+        logger.error(error.message);
         return {
           success: false,
           error: error.message

@@ -57,14 +57,7 @@ describe('FileSystemStorage', () => {
   })
 
   describe('Episode Storage', () => {
-    const testEpisode: Episode = {
-      id: 'test-episode-1',
-      title: 'Test Episode',
-      number: 1,
-      status: 'draft',
-      created: new Date('2024-01-01'),
-      updated: new Date('2024-01-01')
-    }
+    let testEpisode: Episode
 
     beforeEach(async () => {
       await storage.initializeProject(testConfig)
@@ -73,23 +66,33 @@ describe('FileSystemStorage', () => {
       if (!isInit) {
         throw new Error('Failed to initialize project')
       }
+      testEpisode = {
+        id: 'test-episode-1',
+        title: 'Test Episode',
+        url: 'https://example.com/episode1',
+        podcastName: 'Test Podcast',
+        podcastAuthor: 'Test Author',
+        isStarred: false,
+        isListened: false,
+        syncedAt: new Date()
+      }
     })
 
     it('should create and get episode', async () => {
-      await storage.createEpisode(testEpisode)
+      await storage.saveEpisode(testEpisode)
       const episode = await storage.getEpisode(testEpisode.id)
       expect(episode).toEqual(testEpisode)
     })
 
     it('should list episodes', async () => {
-      await storage.createEpisode(testEpisode)
+      await storage.saveEpisode(testEpisode)
       const episodes = await storage.listEpisodes()
       expect(episodes).toHaveLength(1)
       expect(episodes[0]).toEqual(testEpisode)
     })
 
     it('should update episode', async () => {
-      await storage.createEpisode(testEpisode)
+      await storage.saveEpisode(testEpisode)
       const updatedEpisode = { ...testEpisode, title: 'Updated Title' }
       await storage.updateEpisode(testEpisode.id, { title: 'Updated Title' })
       const episode = await storage.getEpisode(testEpisode.id)
@@ -97,7 +100,7 @@ describe('FileSystemStorage', () => {
     })
 
     it('should delete episode', async () => {
-      await storage.createEpisode(testEpisode)
+      await storage.saveEpisode(testEpisode)
       await storage.deleteEpisode(testEpisode.id)
       await expect(storage.getEpisode(testEpisode.id)).rejects.toThrow('Episode not found')
     })
@@ -107,20 +110,22 @@ describe('FileSystemStorage', () => {
     const testEpisode: Episode = {
       id: 'test-episode-1',
       title: 'Test Episode',
-      number: 1,
-      status: 'draft',
-      created: new Date('2024-01-01'),
-      updated: new Date('2024-01-01')
+      url: 'https://example.com/test-episode',
+      podcastName: 'Test Podcast',
+      podcastAuthor: 'Test Author',
+      publishDate: new Date('2024-01-01'),
+      duration: 3600,
+      isStarred: false,
+      isListened: false,
+      progress: 0,
+      syncedAt: new Date('2024-01-01')
     }
 
     const testAsset: Asset = {
-      id: 'test-asset-1',
-      episodeId: testEpisode.id,
       type: 'audio',
       name: 'Test Audio',
       data: Buffer.from('test asset data'),
-      created: new Date('2024-01-01'),
-      updated: new Date('2024-01-01')
+      downloadedAt: new Date('2024-01-01')
     }
 
     beforeEach(async () => {
@@ -130,26 +135,26 @@ describe('FileSystemStorage', () => {
       if (!isInit) {
         throw new Error('Failed to initialize project')
       }
-      await storage.createEpisode(testEpisode)
+      await storage.saveEpisode(testEpisode)
     })
 
     it('should save and get asset', async () => {
-      await storage.saveAsset(testAsset)
-      const asset = await storage.getAsset(testEpisode.id, testAsset.id)
+      await storage.saveAsset(testEpisode.id, testAsset)
+      const asset = await storage.getAsset(testEpisode.id, testAsset.name)
       expect(asset).toEqual(testAsset)
     })
 
     it('should list assets', async () => {
-      await storage.saveAsset(testAsset)
+      await storage.saveAsset(testEpisode.id, testAsset)
       const assets = await storage.listAssets(testEpisode.id)
       expect(assets).toHaveLength(1)
       expect(assets[0]).toEqual(testAsset)
     })
 
     it('should delete asset', async () => {
-      await storage.saveAsset(testAsset)
-      await storage.deleteAsset(testEpisode.id, testAsset.id)
-      await expect(storage.getAsset(testEpisode.id, testAsset.id)).rejects.toThrow('Asset not found')
+      await storage.saveAsset(testEpisode.id, testAsset)
+      await storage.deleteAsset(testEpisode.id, testAsset.name)
+      await expect(storage.getAsset(testEpisode.id, testAsset.name)).rejects.toThrow('Asset not found')
     })
 
     it('should handle binary asset data', async () => {
@@ -157,9 +162,25 @@ describe('FileSystemStorage', () => {
         ...testAsset,
         data: Buffer.from([0x00, 0x01, 0x02, 0x03])
       }
-      await storage.saveAsset(binaryAsset)
-      const asset = await storage.getAsset(testEpisode.id, testAsset.id)
+      await storage.saveAsset(testEpisode.id, binaryAsset)
+      const asset = await storage.getAsset(testEpisode.id, testAsset.name)
       expect(Buffer.compare(asset.data, binaryAsset.data)).toBe(0)
+    })
+
+    it('should save and get asset for episode', async () => {
+      await storage.saveEpisode(testEpisode)
+      const episode = await storage.getEpisode(testEpisode.id)
+      expect(episode).toEqual(testEpisode)
+      await storage.saveEpisode(testEpisode)
+      const testAsset: Asset = {
+        type: 'audio',
+        name: 'test-asset',
+        data: Buffer.from('test data'),
+        downloadedAt: new Date()
+      }
+      await storage.saveAsset(testEpisode.id, testAsset)
+      const asset = await storage.getAsset(testEpisode.id, testAsset.name)
+      expect(asset).toEqual(testAsset)
     })
   })
 })

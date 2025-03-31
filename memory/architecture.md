@@ -317,3 +317,54 @@ Special formatters for CLI output:
 - Gracefully handles circular references
 - Properly formats Error objects
 - Supports various input types (strings, objects, arrays) 
+
+# Storage Layer Architecture
+
+## Overview
+The storage layer provides a robust foundation for managing podcast data with a clear separation of concerns and multiple backend support.
+
+## Core Interfaces
+
+### PodcastStorage
+Combined interface that includes:
+- ProjectStorage: Project configuration management
+- EpisodeStorage: Episode CRUD operations
+- AssetStorage: Binary asset management
+
+### Implementation Patterns
+1. FileSystemStorage:
+   - JSON-based metadata storage
+   - Binary data handling for assets
+   - Directory structure:
+     ```
+     root/
+     ├── config.json
+     ├── episodes/
+     │   └── {episode-id}.json
+     └── assets/
+         └── {episode-id}/
+             └── {asset-name}.json
+     ```
+
+2. MockStorage:
+   - In-memory storage for testing
+   - Map-based data structures
+   - Full interface implementation
+
+3. StorageProvider:
+   - Factory pattern for storage instances
+   - Configuration management
+   - Runtime reconfiguration support
+   - Default path handling
+
+## Validation Strategy
+- Zod schemas for runtime validation
+- Type safety with TypeScript
+- Comprehensive error handling
+- Date handling for serialization
+
+## Error Handling
+- Specific error types for different scenarios
+- Proper cleanup on failures
+- Validation before operations
+- Meaningful error messages 

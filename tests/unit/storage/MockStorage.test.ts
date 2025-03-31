@@ -4,9 +4,20 @@ import type { ProjectConfig, Episode, Asset } from '@/storage/interfaces.js'
 
 describe('MockStorage', () => {
   let storage: MockStorage
+  let testConfig: ProjectConfig
+  let testEpisode: Episode
+  let testAsset: Asset
 
   beforeEach(() => {
     storage = new MockStorage()
+    testConfig = {
+      name: 'Test Podcast',
+      author: 'Test Author',
+      email: 'test@example.com',
+      description: 'A test podcast',
+      created: new Date('2024-01-01'),
+      updated: new Date('2024-01-01')
+    }
   })
 
   describe('Project Storage', () => {
@@ -44,91 +55,76 @@ describe('MockStorage', () => {
   })
 
   describe('Episode Storage', () => {
-    const testEpisode: Episode = {
-      id: '123',
-      title: 'Test Episode',
-      number: 1,
-      status: 'draft',
-      created: new Date(),
-      updated: new Date()
-    }
-
     beforeEach(async () => {
-      await storage.initializeProject({
-        name: 'Test',
-        author: 'Test',
-        email: 'test@example.com',
-        created: new Date(),
-        updated: new Date()
-      })
+      await storage.initializeProject(testConfig)
+      testEpisode = {
+        id: 'test-episode-1',
+        title: 'Test Episode',
+        url: 'https://example.com/episode1',
+        podcastName: 'Test Podcast',
+        podcastAuthor: 'Test Author',
+        isStarred: false,
+        isListened: false,
+        syncedAt: new Date()
+      }
     })
 
     it('should create and get episode', async () => {
-      await storage.createEpisode(testEpisode)
+      await storage.saveEpisode(testEpisode)
       await expect(storage.getEpisode(testEpisode.id)).resolves.toEqual(testEpisode)
     })
 
     it('should list episodes', async () => {
-      await storage.createEpisode(testEpisode)
+      await storage.saveEpisode(testEpisode)
       const episodes = await storage.listEpisodes()
       expect(episodes).toHaveLength(1)
       expect(episodes[0]).toEqual(testEpisode)
     })
 
     it('should update episode', async () => {
-      await storage.createEpisode(testEpisode)
+      await storage.saveEpisode(testEpisode)
       const update = { title: 'Updated Title' }
       await storage.updateEpisode(testEpisode.id, update)
       const episode = await storage.getEpisode(testEpisode.id)
-      expect(episode.title).toBe(update.title)
-      expect(episode.number).toBe(testEpisode.number)
+      expect(episode.title).toBe('Updated Title')
     })
 
     it('should delete episode', async () => {
-      await storage.createEpisode(testEpisode)
+      await storage.saveEpisode(testEpisode)
       await storage.deleteEpisode(testEpisode.id)
       await expect(storage.getEpisode(testEpisode.id)).rejects.toThrow('Episode not found')
     })
   })
 
   describe('Asset Storage', () => {
-    const testAsset: Asset = {
-      id: '123',
-      episodeId: '456',
-      type: 'audio',
-      name: 'test.mp3',
-      path: '/path/to/test.mp3',
-      mimeType: 'audio/mpeg',
-      size: 1024,
-      created: new Date()
-    }
-
     beforeEach(async () => {
-      await storage.initializeProject({
-        name: 'Test',
-        author: 'Test',
-        email: 'test@example.com',
-        created: new Date(),
-        updated: new Date()
-      })
+      await storage.initializeProject(testConfig)
+      testAsset = {
+        type: 'audio',
+        name: 'test-asset',
+        data: Buffer.from('test data'),
+        downloadedAt: new Date()
+      }
+      await storage.saveEpisode(testEpisode)
     })
 
     it('should save and get asset', async () => {
-      await storage.saveAsset(testAsset)
-      await expect(storage.getAsset(testAsset.episodeId, testAsset.id)).resolves.toEqual(testAsset)
+      await storage.saveAsset(testEpisode.id, testAsset)
+      const asset = await storage.getAsset(testEpisode.id, testAsset.name)
+      expect(asset).toEqual(testAsset)
     })
 
     it('should list assets', async () => {
-      await storage.saveAsset(testAsset)
-      const assets = await storage.listAssets(testAsset.episodeId)
+      await storage.saveAsset(testEpisode.id, testAsset)
+      const assets = await storage.listAssets(testEpisode.id)
       expect(assets).toHaveLength(1)
       expect(assets[0]).toEqual(testAsset)
     })
 
     it('should delete asset', async () => {
-      await storage.saveAsset(testAsset)
-      await storage.deleteAsset(testAsset.episodeId, testAsset.id)
-      await expect(storage.getAsset(testAsset.episodeId, testAsset.id)).rejects.toThrow('Asset not found')
+      await storage.saveAsset(testEpisode.id, testAsset)
+      await storage.deleteAsset(testEpisode.id, testAsset.name)
+      await expect(storage.getAsset(testEpisode.id, testAsset.name)).rejects.toThrow('Asset not found')
     })
   })
 }) 

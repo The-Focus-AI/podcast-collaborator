@@ -43,6 +43,20 @@ export class StorageProvider {
     this.storage = null
   }
 
+  async initialize(): Promise<void> {
+    const storage = this.getStorage()
+    if (!await storage.isInitialized()) {
+      await storage.initializeProject({
+        name: 'My Podcast Library',
+        author: 'Podcast CLI',
+        email: 'podcasts@example.com',
+        description: 'A library of synced podcasts',
+        created: new Date(),
+        updated: new Date()
+      })
+    }
+  }
+
   getStorage(): PodcastStorage {
     if (!this.storage) {
       this.storage = this.createStorage()
