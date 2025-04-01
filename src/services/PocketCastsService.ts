@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { Episode } from '@/storage/interfaces.js'
+import { OnePasswordService } from './OnePasswordService.js'
 
 // Raw API response types
 export interface PocketCastsResponse {
@@ -19,6 +20,7 @@ export interface PocketCastsEpisode {
   playingStatus: number
   starred: boolean
   playedUpTo: number
+  author?: string
 }
 
 // Zod schemas for runtime validation
@@ -34,7 +36,8 @@ export const PocketCastsEpisodeSchema = z.object({
   status: z.enum(['unplayed', 'played']).optional(),
   playingStatus: z.number(),
   starred: z.boolean(),
-  playedUpTo: z.number()
+  playedUpTo: z.number(),
+  author: z.string().optional()
 })
 
 export const PocketCastsResponseSchema = z.object({
@@ -47,9 +50,10 @@ export const PocketCastsAuthSchema = z.object({
 })
 
 export interface PocketCastsService {
-  login(email: string, password: string): Promise<void>
+  login(): Promise<void>
   getListenedEpisodes(): Promise<PocketCastsEpisode[]>
   getStarredEpisodes(): Promise<PocketCastsEpisode[]>
+  convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Episode
 }
 
 export class PocketCastsServiceImpl implements PocketCastsService {
@@ -60,6 +64,8 @@ export class PocketCastsServiceImpl implements PocketCastsService {
     'Accept': 'application/json',
     'cache-control': 'no-cache'
   }
+
+  constructor(private readonly onePasswordService: OnePasswordService) {}
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     if (!this.token && !endpoint.includes('/user/login')) {
@@ -117,11 +123,13 @@ export class PocketCastsServiceImpl implements PocketCastsService {
     return data as T
   }
 
-  async login(email: string, password: string): Promise<void> {
+  async login(): Promise<void> {
     try {
+      const credentials = await this.onePasswordService.getCredentials();
+      
       const requestBody = { 
-        email, 
-        password,
+        email: credentials.email, 
+        password: credentials.password,
         scope: 'webplayer'  // Simplify to just webplayer scope
       }
       
@@ -169,29 +177,24 @@ export class PocketCastsServiceImpl implements PocketCastsService {
     return validated.episodes
   }
 
-  static convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Episode {
-    // Validate input
-    const validated = PocketCastsEpisodeSchema.parse(pocketcastsEpisode)
-    
-    // Calculate progress, ensuring it's between 0 and 1
-    const progress = validated.duration > 0 
-      ? Math.min(1, Math.max(0, validated.playedUpTo / validated.duration))
-      : 0
-    
+  convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Episode {
     return {
-      id: validated.uuid,
-      title: validated.title,
-      url: validated.url,
-      podcastName: validated.podcastTitle,
-      publishDate: new Date(validated.published),
-      duration: validated.duration,
-      isStarred: validated.starred,
-      isListened: validated.status === 'played' || validated.playedUpTo > 0,
-      progress,
-      lastListenedAt: validated.playedUpTo > 0 ? new Date() : undefined,
+      id: pocketcastsEpisode.uuid,
+      title: pocketcastsEpisode.title,
+      url: pocketcastsEpisode.url,
+      podcastName: pocketcastsEpisode.podcastTitle,
+      podcastAuthor: pocketcastsEpisode.author || 'Unknown',
+      publishDate: new Date(pocketcastsEpisode.published),
+      duration: pocketcastsEpisode.duration,
+      isStarred: pocketcastsEpisode.starred,
+      isListened: pocketcastsEpisode.playingStatus === 3,
+      playingStatus: pocketcastsEpisode.playingStatus,
+      playedUpTo: pocketcastsEpisode.playedUpTo,
+      progress: pocketcastsEpisode.playedUpTo / pocketcastsEpisode.duration,
+      lastListenedAt: pocketcastsEpisode.playedUpTo > 0 ? new Date() : undefined,
       syncedAt: new Date(),
       isDownloaded: false,
       hasTranscript: false
-    }
+    };
   }
 } 

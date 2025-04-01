@@ -2,9 +2,8 @@ import React, { FC, useState, useEffect } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import { Episode } from '../storage/interfaces.js';
 import { SyncProgress } from './SyncProgress.js';
-import { StorageProvider } from '../storage/StorageProvider.js';
-import { PocketCastsService, PocketCastsServiceImpl } from '../services/PocketCastsService.js';
-import { OnePasswordService } from '../services/OnePasswordService.js';
+import { EpisodeService } from '../services/EpisodeService.js';
+import chalk from 'chalk';
 
 type FilterMode = 'all' | 'starred' | 'downloaded' | 'transcribed';
 type SortMode = 'listened' | 'alpha' | 'shortest' | 'longest';
@@ -13,17 +12,13 @@ type SyncStage = 'login' | 'fetching' | 'saving' | 'complete' | 'error';
 interface PodcastBrowserProps {
   episodes: Episode[];
   onEpisodesUpdated?: (episodes: Episode[]) => void;
-  storageProvider: StorageProvider;
-  pocketCastsService: PocketCastsService;
-  onePasswordService: OnePasswordService;
+  episodeService: EpisodeService;
 }
 
 export const PodcastBrowser: FC<PodcastBrowserProps> = ({ 
   episodes, 
   onEpisodesUpdated,
-  storageProvider,
-  pocketCastsService,
-  onePasswordService
+  episodeService
 }) => {
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [sortMode, setSortMode] = useState<SortMode>('listened');
@@ -62,46 +57,14 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
   const handleSync = async () => {
     try {
       setIsSyncing(true);
-      setSyncStage('login');
-      setSyncMessage('Connecting to PocketCasts...');
-
-      const storage = storageProvider.getStorage();
-
-      // Get credentials from 1Password
-      setSyncMessage('Retrieving credentials from 1Password...');
-      const credentials = await onePasswordService.getCredentials();
-      
-      // Login
-      await pocketCastsService.login(credentials.email, credentials.password);
-      
-      // Fetch episodes
       setSyncStage('fetching');
-      setSyncMessage('Fetching starred episodes...');
-      const starredEpisodes = await pocketCastsService.getStarredEpisodes();
-      
-      setSyncMessage('Fetching listened episodes...');
-      const listenedEpisodes = await pocketCastsService.getListenedEpisodes();
-      
-      // Combine and deduplicate episodes
-      const allEpisodes = [...starredEpisodes, ...listenedEpisodes];
-      const uniqueEpisodes = Array.from(new Map(allEpisodes.map(e => [e.uuid, e])).values());
-      
-      // Save episodes
-      setSyncStage('saving');
-      setSyncProgress({ count: 0, total: uniqueEpisodes.length });
+      setSyncMessage('Syncing episodes...');
 
-      for (const episode of uniqueEpisodes) {
-        setSyncMessage(`Saving episode: ${episode.title}`);
-        await storage.saveEpisode(PocketCastsServiceImpl.convertToEpisode(episode));
-        setSyncProgress(prev => ({ ...prev, count: prev.count + 1 }));
-      }
-
-      // Update episodes list
-      const updatedEpisodes = await storage.listEpisodes();
+      const updatedEpisodes = await episodeService.syncEpisodes();
       onEpisodesUpdated?.(updatedEpisodes);
 
       setSyncStage('complete');
-      setSyncMessage(`Successfully synced ${uniqueEpisodes.length} episodes`);
+      setSyncMessage(`Successfully synced ${updatedEpisodes.length} episodes`);
 
       // Auto-hide sync progress after 3 seconds
       setTimeout(() => {
@@ -140,13 +103,17 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
   const sortedEpisodes = [...filteredEpisodes].sort((a, b) => {
     switch (sortMode) {
       case 'listened':
-        return (b.lastListenedAt?.getTime() || 0) - (a.lastListenedAt?.getTime() || 0);
+        // Preserve the original order from storage
+        // Episodes are already ordered by listen history with starred appended
+        return 0;
       case 'alpha':
         return a.title.localeCompare(b.title);
       case 'shortest':
         return (a.duration || 0) - (b.duration || 0);
       case 'longest':
         return (b.duration || 0) - (a.duration || 0);
+      default:
+        return 0;
     }
   });
 
@@ -205,190 +172,182 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    
+    if (hours > 0) {
+      return `${hours}h${minutes}m`.padStart(6);
+    }
+    return `${minutes}m`.padStart(6);
   };
 
   // Format date in a readable format
   const formatDate = (date: Date | undefined): string => {
     if (!date) return 'N/A';
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    const day = date.getDate().toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${month} ${day}, ${year}`;
   };
+
+  function getStatusSymbols(episode: Episode): string {
+    const starred = episode.isStarred ? chalk.yellow('★') : ' ';
+    const listened = episode.isListened ? chalk.green('✓') : ' ';
+    const transcribed = episode.hasTranscript ? chalk.blue('T') : ' ';
+    return `${starred}${listened}${transcribed} `;
+  }
+
+  function getProgress(episode: Episode): string {
+    if (episode.isListened) return '100%';
+    if (episode.playedUpTo > 0) {
+      const progress = Math.round((episode.playedUpTo / episode.duration) * 100);
+      return `${progress}%`;
+    }
+    return '0%';
+  }
+
+  function truncate(str: string, length: number): string {
+    if (str.length <= length) return str;
+    return str.slice(0, length - 1) + '…';
+  }
+
+  function formatEpisode(episode: Episode): string {
+    const date = chalk.blue(formatDate(episode.publishDate));
+    const status = getStatusSymbols(episode);
+    const duration = chalk.yellow(formatDuration(episode.duration));
+    const podcastTitle = truncate(episode.podcastName, 35);
+    const episodeTitle = truncate(episode.title, 45);
+    const progress = chalk.cyan(getProgress(episode));
+
+    return `${date} ${status}${duration} ${chalk.green(podcastTitle)} ${episodeTitle} ${progress}`;
+  }
 
   const selectedEpisode = sortedEpisodes[selectedIndex];
 
+  // Add this function to handle scrolling
+  function getVisibleEpisodes(episodes: Episode[], selectedIndex: number, maxVisible: number) {
+    const start = Math.max(0, Math.min(selectedIndex - Math.floor(maxVisible / 2), episodes.length - maxVisible));
+    return episodes.slice(start, start + maxVisible);
+  }
+
   return (
     <Box flexDirection="column" height={process.stdout.rows}>
-      {showHelp ? (
-        <Box flexDirection="column" padding={1}>
-          <Box marginBottom={1}>
-            <Text bold>Podcast Browser Help</Text>
-          </Box>
-          
-          <Box marginBottom={1}>
-            <Text>Storage Configuration:</Text>
-          </Box>
-          
-          <Box marginBottom={1} paddingLeft={2}>
+      {/* Header - Single line */}
+      <Box height={1}>
+        <Text>
+          {isFiltering ? (
+            <Text>Search: {nameFilter}</Text>
+          ) : (
             <Text>
-              Storage Type: <Text color="blue">{storageProvider.getConfig().type}</Text>{'\n'}
-              Storage Path: <Text color="blue">{storageProvider.getConfig().path}</Text>
+              Filter: <Text color="green">{filterMode.toUpperCase()}</Text> | 
+              Sort: <Text color="yellow">{sortMode.toUpperCase()}</Text>
             </Text>
-          </Box>
-          
-          <Box marginBottom={1}>
-            <Text>Current Configuration:</Text>
-          </Box>
-          
-          <Box marginBottom={1} paddingLeft={2}>
-            <Text>
-              Filter Mode: <Text color="green">{filterMode.toUpperCase()}</Text>{'\n'}
-              Sort Mode: <Text color="yellow">{sortMode.toUpperCase()}</Text>{'\n'}
-              Total Episodes: <Text color="blue">{episodes.length}</Text>{'\n'}
-              Filtered Episodes: <Text color="blue">{filteredEpisodes.length}</Text>
-            </Text>
-          </Box>
-          
-          <Box marginBottom={1}>
-            <Text>Available Commands:</Text>
-          </Box>
-          
-          <Box marginBottom={1} paddingLeft={2}>
-            <Text>
-              <Text color="green">q</Text>: Quit{'\n'}
-              <Text color="green">f</Text>: Cycle filter (all → starred → downloaded → transcribed){'\n'}
-              <Text color="green">o</Text>: Cycle sort (listened → alpha → shortest → longest){'\n'}
-              <Text color="green">/</Text>: Search episodes{'\n'}
-              <Text color="green">s</Text>: Sync with PocketCasts{'\n'}
-              <Text color="green">↑↓</Text>: Navigate episodes{'\n'}
-              <Text color="green">?</Text>: Show/hide this help screen
-            </Text>
-          </Box>
-          
-          <Box marginTop={1}>
-            <Text dimColor>Press any key to close help</Text>
-          </Box>
-        </Box>
-      ) : (
-        <>
-          {/* Header - Filter and Sort Info */}
-          <Box padding={1}>
-            <Text>
-              {isFiltering ? (
-                <Text>Search: {nameFilter}</Text>
-              ) : (
-                <Text>
-                  Filter: <Text color="green">{filterMode.toUpperCase()}</Text> | 
-                  Sort: <Text color="yellow">{sortMode.toUpperCase()}</Text>
-                </Text>
-              )}
-            </Text>
-          </Box>
-
-          {/* Sync Progress */}
-          {isSyncing && (
-            <SyncProgress
-              stage={syncStage}
-              message={syncMessage}
-              count={syncProgress.count}
-              total={syncProgress.total}
-            />
           )}
+        </Text>
+      </Box>
 
-          {/* Main Content Area */}
-          <Box flexGrow={1}>
-            {/* Episode List - Left Side */}
-            <Box width="40%" borderStyle="single">
-              {episodes.length === 0 ? (
-                <Box padding={1}>
-                  <Text dimColor>No episodes found. Use 'sync' command to fetch episodes.</Text>
-                </Box>
-              ) : sortedEpisodes.length === 0 ? (
-                <Box padding={1}>
-                  <Text dimColor>No episodes match the current filter.</Text>
-                </Box>
-              ) : (
-                sortedEpisodes.map((episode, index) => (
-                  <Box key={episode.id} padding={1}>
-                    <Text color={index === selectedIndex ? 'green' : undefined}>
-                      {episode.isStarred ? '⭐ ' : '  '}
-                      {episode.title.substring(0, 35)}
-                      {episode.title.length > 35 ? '...' : ''}
-                    </Text>
-                  </Box>
-                ))
-              )}
-            </Box>
-
-            {/* Episode Details - Right Side */}
-            <Box width="60%" borderStyle="single" flexDirection="column" padding={1}>
-              {selectedEpisode ? (
-                <>
-                  <Box marginBottom={1}>
-                    <Text bold color="blue">{selectedEpisode.podcastName}</Text>
-                  </Box>
-                  <Box marginBottom={1}>
-                    <Text bold>{selectedEpisode.title}</Text>
-                  </Box>
-                  <Box marginBottom={1}>
-                    <Text>
-                      Duration: <Text color="yellow">{formatDuration(selectedEpisode.duration || 0)}</Text> | 
-                      Published: <Text color="yellow">{formatDate(selectedEpisode.publishDate)}</Text>
-                    </Text>
-                  </Box>
-                  <Box marginBottom={1}>
-                    <Text>
-                      {selectedEpisode.isDownloaded ? '📥 Downloaded ' : ''}
-                      {selectedEpisode.isStarred ? '⭐ Starred ' : ''}
-                      {selectedEpisode.hasTranscript ? '📝 Transcribed ' : ''}
-                      {selectedEpisode.isListened ? '👂 Listened ' : ''}
-                      {selectedEpisode.progress ? `(${Math.round(selectedEpisode.progress * 100)}% complete)` : ''}
-                    </Text>
-                  </Box>
-                  <Box marginBottom={1}>
-                    <Text>Last played: {formatDate(selectedEpisode.lastListenedAt)}</Text>
-                  </Box>
-                  <Box flexDirection="column">
-                    <Text bold>Description:</Text>
-                    <Text wrap="wrap" dimColor>
-                      {selectedEpisode.description || 'No description available'}
-                    </Text>
-                  </Box>
-                  {selectedEpisode.notes && (
-                    <Box flexDirection="column" marginTop={1}>
-                      <Text bold>Notes:</Text>
-                      <Text wrap="wrap" color="cyan">
-                        {selectedEpisode.notes}
-                      </Text>
-                    </Box>
-                  )}
-                </>
-              ) : episodes.length === 0 ? (
-                <Text dimColor>No episodes available. Use 'sync' command to fetch episodes.</Text>
-              ) : (
-                <Text dimColor>No episode selected</Text>
-              )}
-            </Box>
-          </Box>
-
-          {/* Footer - Command Info */}
-          <Box padding={1}>
-            <Text>
-              <Text color="green">q</Text>:quit | 
-              <Text color="green">f</Text>:filter | 
-              <Text color="green">o</Text>:sort | 
-              <Text color="green">/</Text>:search | 
-              <Text color="green">s</Text>:sync | 
-              <Text color="green">↑↓</Text>:navigate | 
-              <Text color="green">?</Text>:help
-            </Text>
-          </Box>
-        </>
+      {/* Sync Progress */}
+      {isSyncing && (
+        <SyncProgress
+          stage={syncStage}
+          message={syncMessage}
+          count={syncProgress.count}
+          total={syncProgress.total}
+        />
       )}
+
+      {/* Main Content Area */}
+      <Box flexGrow={1} flexDirection="row">
+        {/* Episode List - Left Side */}
+        <Box width="50%" borderStyle="single">
+          {episodes.length === 0 ? (
+            <Box>
+              <Text dimColor>No episodes found. Press 's' to sync with PocketCasts.</Text>
+            </Box>
+          ) : sortedEpisodes.length === 0 ? (
+            <Box>
+              <Text dimColor>No episodes match the current filter.</Text>
+            </Box>
+          ) : (
+            <Box flexDirection="column">
+              {getVisibleEpisodes(sortedEpisodes, selectedIndex, process.stdout.rows - 4).map((episode, index) => {
+                const isSelected = index + Math.max(0, selectedIndex - Math.floor((process.stdout.rows - 4) / 2)) === selectedIndex;
+                // Calculate available width: panel width (50%) - date (12) - status symbols (4) - padding (4)
+                const availableWidth = Math.floor(process.stdout.columns * 0.5) - 12 - 4 - 4;
+                
+                return (
+                  <Box key={episode.id}>
+                    <Text color={isSelected ? 'green' : undefined}>
+                      {chalk.blue(formatDate(episode.publishDate).slice(0, 12).padEnd(12))}
+                      {getStatusSymbols(episode)}
+                      {truncate(episode.title, availableWidth)}
+                    </Text>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </Box>
+
+        {/* Episode Details - Right Side */}
+        <Box width="50%" borderStyle="single" flexDirection="column">
+          {selectedEpisode ? (
+            <>
+              <Box>
+                <Text bold color="blue">{selectedEpisode.podcastName}</Text>
+              </Box>
+              <Box>
+                <Text bold>{selectedEpisode.title}</Text>
+              </Box>
+              <Box>
+                <Text>
+                  Published: <Text color="yellow">{formatDate(selectedEpisode.publishDate)}</Text>{'\n'}
+                  Duration: <Text color="yellow">{formatDuration(selectedEpisode.duration)}</Text>
+                </Text>
+              </Box>
+              <Box>
+                <Text>
+                  {selectedEpisode.isStarred ? '★ Starred ' : ''}
+                  {selectedEpisode.isListened ? '✓ Listened ' : ''}
+                  {selectedEpisode.hasTranscript ? 'T Transcribed ' : ''}
+                  {selectedEpisode.isDownloaded ? '📥 Downloaded ' : ''}
+                  {selectedEpisode.progress > 0 ? `(${Math.round(selectedEpisode.progress * 100)}% complete)` : ''}
+                </Text>
+              </Box>
+              {selectedEpisode.lastListenedAt && (
+                <Box>
+                  <Text>Last played: {formatDate(selectedEpisode.lastListenedAt)}</Text>
+                </Box>
+              )}
+              {selectedEpisode.description && (
+                <Box flexDirection="column">
+                  <Text bold>Description:</Text>
+                  <Text wrap="wrap" dimColor>{selectedEpisode.description}</Text>
+                </Box>
+              )}
+              {selectedEpisode.notes && (
+                <Box flexDirection="column">
+                  <Text bold>Notes:</Text>
+                  <Text wrap="wrap" color="cyan">{selectedEpisode.notes}</Text>
+                </Box>
+              )}
+            </>
+          ) : (
+            <Text dimColor>No episode selected</Text>
+          )}
+        </Box>
+      </Box>
+
+      {/* Footer - Single line */}
+      <Box height={1}>
+        <Text>
+          <Text color="green">q</Text>:quit |
+          <Text color="green">f</Text>:filter |
+          <Text color="green">o</Text>:sort |
+          <Text color="green">/</Text>:search |
+          <Text color="green">s</Text>:sync |
+          <Text color="green">↑↓</Text>:navigate |
+          <Text color="green">?</Text>:help
+        </Text>
+      </Box>
     </Box>
   );
 }; 

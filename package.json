@@ -10,7 +10,8 @@
     "podcast-cli": "./dist/index.js"
   },
   "scripts": {
-    "dev": "tsx watch src/index.tsx",
+    "dev": "tsx src/index.tsx",
+    "dev:watch": "tsx watch src/index.tsx",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",

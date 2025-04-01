@@ -1,5 +1,36 @@
 # Lessons Learned
 
+## Service Architecture
+1. Centralize domain logic in dedicated services
+   - Example: Moving episode management to EpisodeService improved code organization
+   - Benefit: Better separation of concerns and reusability
+
+2. Maintain consistent data access patterns
+   - Example: Aligning episode listing between browse and list commands
+   - Benefit: Reduces bugs and makes code more maintainable
+
+3. Handle service dependencies properly
+   - Example: Fixed PocketCastsService instantiation with OnePasswordService
+   - Benefit: Ensures services have access to required dependencies
+
+## Data Management
+1. Preserve data ordering when merging from multiple sources
+   - Example: Maintaining listened episode order while merging with starred episodes
+   - Benefit: Better user experience and data integrity
+
+2. Use consistent data transformation approaches
+   - Example: Standardized episode conversion across commands
+   - Benefit: Reduces bugs and makes code more predictable
+
+## Testing
+1. Test both raw data access and transformed data
+   - Example: Testing both getRawData and listEpisodes
+   - Benefit: Catches issues at both levels
+
+2. Verify service integration points
+   - Example: Testing EpisodeService with PocketCasts and storage
+   - Benefit: Catches integration issues early
+
 ## Testing
 1. **Test Directory Management**
    - Using `mkdtemp` for temporary test directories improves reliability
@@ -44,4 +75,4 @@
    - Clear separation of concerns
    - Platform-agnostic business logic
 
-Last Updated: 2024-03-31 10:30:00 EDT 
+Last Updated: 2024-04-01 10:30 EDT 

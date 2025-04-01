@@ -3,12 +3,14 @@ import React from 'react';
 import { Command } from 'commander';
 import { StorageProvider } from './storage/StorageProvider.js';
 import { PocketCastsServiceImpl } from './services/PocketCastsService.js';
+import { OnePasswordService } from './services/OnePasswordService.js';
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { join } from 'path';
-import { createSyncCommand } from './cli/commands/sync.js';
+import { sync } from './cli/commands/sync.js';
 import { createVersionCommand } from './cli/commands/version.js';
 import { createBrowseCommand } from './cli/commands/browse.js';
+import { createListCommand } from './cli/commands/list.js';
 
 async function getPackageVersion(): Promise<string> {
   const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -22,7 +24,8 @@ async function main() {
     const program = new Command();
     const version = await getPackageVersion();
     const storageProvider = new StorageProvider();
-    const pocketCastsService = new PocketCastsServiceImpl();
+    const onePasswordService = new OnePasswordService();
+    const pocketCastsService = new PocketCastsServiceImpl(onePasswordService);
 
     program
       .name('podcast-cli')
@@ -30,8 +33,9 @@ async function main() {
       .version(version);
 
     // Add commands
-    program.addCommand(createSyncCommand(storageProvider, pocketCastsService));
+    program.addCommand(sync);
     program.addCommand(createVersionCommand());
+    program.addCommand(createListCommand(storageProvider));
     
     // Add browse command and set it as default
     const browseCommand = createBrowseCommand(storageProvider, pocketCastsService);

@@ -26,6 +26,7 @@ export interface Episode {
   title: string
   url: string
   podcastName: string      // maps from podcastTitle
+  podcastAuthor: string    // maps from author
   publishDate: Date        // maps from published
   duration: number
   
@@ -34,6 +35,10 @@ export interface Episode {
   isListened: boolean      // maps from status === 'played'
   progress: number         // maps from playedUpTo / duration
   lastListenedAt?: Date    // derived from playedUpTo > 0
+  
+  // Raw PocketCasts fields to preserve history
+  playingStatus: number    // raw playingStatus from PocketCasts
+  playedUpTo: number      // raw playedUpTo from PocketCasts
   
   // Our additional fields
   description?: string     // not provided by PocketCasts API
@@ -49,6 +54,7 @@ export const EpisodeSchema = z.object({
   title: z.string().min(1),
   url: z.string().url(),
   podcastName: z.string().min(1),
+  podcastAuthor: z.string().min(1),
   publishDate: z.date(),
   duration: z.number().min(0),
   
@@ -58,6 +64,10 @@ export const EpisodeSchema = z.object({
   progress: z.number().min(0).max(1),
   lastListenedAt: z.date().optional(),
   
+  // Raw PocketCasts fields to preserve history
+  playingStatus: z.number().min(0),
+  playedUpTo: z.number().min(0),
+  
   // Our additional fields
   description: z.string().optional(),
   notes: z.string().optional(),
@@ -66,20 +76,74 @@ export const EpisodeSchema = z.object({
   hasTranscript: z.boolean()
 })
 
-// Asset (for downloaded content)
-export interface Asset {
-  type: string // 'audio', 'image', etc.
-  name: string
-  data: Buffer
-  downloadedAt: Date
+// Raw PocketCasts Episode exactly as it comes from the API
+export interface RawPocketCastsEpisode {
+  uuid: string
+  title: string
+  url: string
+  published: string // ISO date string
+  duration: number
+  fileType?: string
+  size?: string | number
+  podcastUuid: string
+  podcastTitle: string
+  playingStatus: number // 2 = in progress, 3 = completed
+  starred: boolean
+  playedUpTo: number
+  episodeType?: string
+  episodeSeason?: number
+  episodeNumber?: number
+  isDeleted?: boolean
+  author?: string
+  bookmarks?: unknown[]
 }
 
-export const AssetSchema = z.object({
-  type: z.string().min(1),
-  name: z.string().min(1),
-  data: z.instanceof(Buffer),
-  downloadedAt: z.date()
+export const RawPocketCastsEpisodeSchema = z.object({
+  uuid: z.string(),
+  title: z.string(),
+  url: z.string(),
+  published: z.string(), // Keep as string, no need to parse
+  duration: z.number(),
+  fileType: z.string().optional(),
+  size: z.union([z.string(), z.number()]).optional(),
+  podcastUuid: z.string(),
+  podcastTitle: z.string(),
+  playingStatus: z.number(),
+  starred: z.boolean(),
+  playedUpTo: z.number(),
+  episodeType: z.string().optional(),
+  episodeSeason: z.number().optional(),
+  episodeNumber: z.number().optional(),
+  isDeleted: z.boolean().optional(),
+  author: z.string().optional(),
+  bookmarks: z.array(z.unknown()).optional()
 })
+
+// Raw PocketCasts data storage
+export interface RawPocketCastsData {
+  type: 'starred' | 'listened'
+  episodes: RawPocketCastsEpisode[]
+  syncedAt: string // ISO date string
+}
+
+export const RawPocketCastsDataSchema = z.object({
+  type: z.enum(['starred', 'listened']),
+  episodes: z.array(RawPocketCastsEpisodeSchema),
+  syncedAt: z.string() // Keep as string, no need to parse
+})
+
+// Raw data storage interface
+export interface RawDataStorage {
+  saveRawData(type: 'starred' | 'listened', data: RawPocketCastsEpisode[]): Promise<void>
+  getRawData(type: 'starred' | 'listened'): Promise<RawPocketCastsEpisode[]>
+}
+
+// Raw storage interface
+export interface RawEpisodeStorage {
+  saveRawEpisode(episode: RawPocketCastsEpisode): Promise<void>
+  getRawEpisode(id: string): Promise<RawPocketCastsEpisode>
+  listRawEpisodes(): Promise<RawPocketCastsEpisode[]>
+}
 
 // Project Storage Interface
 export interface ProjectStorage {
@@ -98,6 +162,21 @@ export interface EpisodeStorage {
   deleteEpisode(id: string): Promise<void>
 }
 
+// Asset (for downloaded content)
+export interface Asset {
+  type: string // 'audio', 'image', etc.
+  name: string
+  data: Buffer
+  downloadedAt: Date
+}
+
+export const AssetSchema = z.object({
+  type: z.string().min(1),
+  name: z.string().min(1),
+  data: z.instanceof(Buffer),
+  downloadedAt: z.date()
+})
+
 // Asset Storage Interface
 export interface AssetStorage {
   saveAsset(episodeId: string, asset: Asset): Promise<void>
@@ -107,8 +186,7 @@ export interface AssetStorage {
 }
 
 // Combined interface
-export interface PodcastStorage extends EpisodeStorage, AssetStorage {
-  // Additional methods can be added here if needed
+export interface PodcastStorage extends AssetStorage, RawDataStorage, EpisodeStorage {
   initializeProject(config: ProjectConfig): Promise<void>
   getProjectConfig(): Promise<ProjectConfig>
   updateProjectConfig(config: Partial<ProjectConfig>): Promise<void>

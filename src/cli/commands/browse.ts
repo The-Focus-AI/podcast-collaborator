@@ -4,7 +4,7 @@ import { render } from 'ink';
 import { PodcastBrowser } from '../../components/PodcastBrowser.js';
 import { StorageProvider } from '../../storage/StorageProvider.js';
 import { PocketCastsService } from '../../services/PocketCastsService.js';
-import { OnePasswordService } from '../../services/OnePasswordService.js';
+import { EpisodeService, EpisodeServiceImpl } from '../../services/EpisodeService.js';
 import { logger } from '../../utils/logger.js';
 
 export function createBrowseCommand(
@@ -19,14 +19,11 @@ export function createBrowseCommand(
         await storageProvider.initialize();
         logger.commandSuccess('Storage initialized');
 
-        // Get storage instance
-        const storage = await storageProvider.getStorage();
-        
-        // Get initial episodes
-        const episodes = await storage.listEpisodes();
+        // Create episode service
+        const episodeService = new EpisodeServiceImpl(storageProvider, pocketCastsService);
 
-        // Create OnePassword service
-        const onePasswordService = new OnePasswordService();
+        // Get episodes from storage
+        const episodes = await episodeService.listEpisodes();
 
         // Create a single render instance
         const { waitUntilExit } = render(
@@ -42,21 +39,15 @@ export function createBrowseCommand(
                     render(
                       React.createElement(PodcastBrowser, {
                         episodes: newEpisodes,
-                        storageProvider,
-                        pocketCastsService,
-                        onePasswordService
+                        episodeService
                       })
                     );
                   },
-                  storageProvider,
-                  pocketCastsService,
-                  onePasswordService
+                  episodeService
                 })
               );
             },
-            storageProvider,
-            pocketCastsService,
-            onePasswordService
+            episodeService
           })
         );
 

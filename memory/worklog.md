@@ -493,3 +493,61 @@ Completed the storage layer implementation and began work on PocketCasts integra
 2. Add storage migration support
 3. Improve error handling mechanisms
 4. Implement remaining commands 
+
+## 2024-04-01 10:00:00 EDT
+
+### List Command Implementation
+- Created ListCommand with:
+  - Episode listing with status flags
+  - Filtering options (starred, listened, downloaded, transcribed)
+  - JSON output support
+  - Formatted terminal output with colors
+  - Progress indicators
+  - Duration and date formatting
+- Added comprehensive test suite:
+  - Basic listing tests
+  - Filter option tests
+  - JSON output tests
+  - Error handling tests
+- All tests passing 
+
+## 2024-04-01: Fixed Episode Service Integration and Browse Command
+
+### Summary
+Fixed issues with episode browsing functionality by properly integrating EpisodeService and fixing service instantiation. Resolved problems with episode listing and service dependencies.
+
+### Accomplishments
+- Fixed PocketCastsService instantiation with OnePasswordService
+- Updated EpisodeService to handle episode listing consistently
+- Refactored browse command to use EpisodeService properly
+- Aligned episode listing behavior between browse and list commands
+- Fixed episode conversion from raw data to maintain proper order
+
+### Decisions
+- Moved episode management logic to EpisodeService
+- Used consistent approach for episode listing across commands
+- Maintained listened episode order while merging with starred episodes
+
+### Next Steps
+1. Continue with command integration
+2. Implement remaining core commands
+3. Add error recovery mechanisms
+4. Add storage migration support
+5. Configure Git hooks for pre-commit checks
+
+## 2024-04-01 10:00:00 EDT
+
+### List Command Implementation
+- Created ListCommand with:
+  - Episode listing with status flags
+  - Filtering options (starred, listened, downloaded, transcribed)
+  - JSON output support
+  - Formatted terminal output with colors
+  - Progress indicators
+  - Duration and date formatting
+- Added comprehensive test suite:
+  - Basic listing tests
+  - Filter option tests
+  - JSON output tests
+  - Error handling tests
+- All tests passing 

@@ -5,6 +5,10 @@
 - Previous failing tests related to App command handling have been removed
 - Core functionality is working as expected
 - Added PodcastBrowser component with comprehensive UI
+- Episode browsing functionality is now working correctly
+- EpisodeService properly integrated with PocketCasts and storage
+- Browse and list commands aligned in behavior
+- Service dependencies properly configured
 
 ## Test Coverage
 1. Storage Layer:
@@ -26,49 +30,38 @@
    - PodcastBrowser Component (6 tests)
 
 ## Current Focus
-- All core functionality tests are passing
-- Error handling and logging are working correctly
-- Command execution flow is stable
-- Rich terminal UI for podcast browsing implemented
+Improving episode management and service integration in the podcast CLI tool.
+
+## What's Working
+- Episode listing with proper order preservation
+- Service integration (PocketCasts, OnePassword)
+- Episode conversion and storage
+- Browse and list commands
+
+## Current Challenges
+None at the moment - core functionality is working as expected.
 
 ## Next Steps
-1. Consider adding more comprehensive tests for:
-   - Edge cases in command handling
-   - Error scenarios in file system operations
-   - Network failure scenarios in PocketCasts integration
-   - Additional UI interaction scenarios
-
-2. Potential improvements:
-   - Add more UI component tests
-   - Enhance error message clarity
-   - Add integration tests
-   - Add keyboard shortcuts for additional actions
-   - Implement episode playback controls
-   - Add transcript viewing functionality
-
-## Recent Implementations
-1. PodcastBrowser Component Features:
-   - Four-area layout (header, footer, episode list, details)
-   - Multiple filter modes (all, starred, downloaded, transcribed)
-   - Multiple sort modes (listened, alpha, shortest, longest)
-   - Search functionality
-   - Rich episode details display
-   - Keyboard navigation
-   - Status indicators (downloaded, starred, transcribed, etc.)
-
-2. Testing Coverage:
-   - Basic rendering tests
-   - Filter functionality tests
-   - Sort order tests
-   - Search functionality tests
-
-## Blockers
-None currently - all tests are passing
+1. Add more comprehensive error handling
+2. Implement remaining commands
+3. Add storage migration support
+4. Configure Git hooks for pre-commit checks
 
 ## Recent Decisions
-1. Removed problematic command handling tests that were causing inconsistencies
-2. Maintained focus on core functionality testing
-3. Kept existing error handling patterns
+1. Moved episode management logic to EpisodeService
+2. Standardized episode listing approach across commands
+3. Maintained listened episode order while handling starred episodes
+
+## Code Structure
+- `src/services/EpisodeService.ts`: Central service for episode management
+- `src/services/PocketCastsService.ts`: PocketCasts API integration
+- `src/cli/commands/`: Command implementations
+- `src/components/`: React components for TUI
+
+## Testing Status
+- Core functionality tests passing
+- Need to add more integration tests
+- Need to add error handling tests
 
 ## Current Focus: Command System Implementation and Code Organization
 

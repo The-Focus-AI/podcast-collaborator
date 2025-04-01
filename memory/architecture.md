@@ -198,10 +198,59 @@ memory/              # Project documentation and tracking
 ## Implementation Patterns
 
 ### Service Pattern
-- Services are platform-agnostic
-- Dependency injection for all services
-- Interface-based design
-- Error handling through Result type
+Services are the core of our business logic implementation:
+
+1. **EpisodeService**
+   - Central service for episode management
+   - Handles episode synchronization and listing
+   - Maintains consistent episode ordering
+   - Coordinates between PocketCasts and storage
+
+2. **PocketCastsService**
+   - Handles PocketCasts API integration
+   - Manages authentication with OnePassword
+   - Converts PocketCasts episodes to our format
+   - Maintains API state (auth tokens, etc.)
+
+3. **OnePasswordService**
+   - Manages credential retrieval
+   - Provides secure access to API keys
+   - Handles CLI integration with 1Password
+
+4. **StorageService**
+   - Manages local data persistence
+   - Handles raw data storage
+   - Provides episode storage capabilities
+   - Maintains data integrity
+
+### Service Dependencies
+```mermaid
+graph TD
+    A[EpisodeService] --> B[PocketCastsService]
+    A --> C[StorageProvider]
+    B --> D[OnePasswordService]
+```
+
+### Service Principles
+1. **Single Responsibility**
+   - Each service has a clear, focused purpose
+   - Services don't reach across boundaries
+   - Clear separation of concerns
+
+2. **Dependency Injection**
+   - Services receive dependencies in constructor
+   - No service creates its own dependencies
+   - Easy to test and mock
+
+3. **Data Transformation**
+   - Services handle their own data conversion
+   - Maintain data integrity across transformations
+   - Clear interfaces between services
+
+4. **State Management**
+   - Services manage their own state
+   - State is encapsulated and protected
+   - Clear state ownership boundaries
 
 ### Component Pattern
 - Pure functional components when possible
