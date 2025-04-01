@@ -41,12 +41,30 @@ export interface Episode {
   playedUpTo: number      // raw playedUpTo from PocketCasts
   
   // Our additional fields
-  description?: string     // not provided by PocketCasts API
   notes?: string          // our own notes
   syncedAt: Date          // when we last synced
   isDownloaded: boolean   // our download status
   hasTranscript: boolean  // our transcript status
 }
+
+// Episode Notes
+export interface EpisodeNote {
+  id: string              // same as episode id
+  description?: string    // show notes content
+  error?: string         // error message if loading failed
+  loadedAt: Date         // when the notes were loaded
+  lastAttempt?: Date     // when we last tried to load notes
+  retryCount: number     // number of times we've tried to load
+}
+
+export const EpisodeNoteSchema = z.object({
+  id: z.string().min(1),
+  description: z.string().optional(),
+  error: z.string().optional(),
+  loadedAt: z.date(),
+  lastAttempt: z.date().optional(),
+  retryCount: z.number().min(0)
+})
 
 export const EpisodeSchema = z.object({
   // Core fields from PocketCasts
@@ -70,6 +88,7 @@ export const EpisodeSchema = z.object({
   
   // Our additional fields
   description: z.string().optional(),
+  showNotesError: z.string().optional(),
   notes: z.string().optional(),
   syncedAt: z.date(),
   isDownloaded: z.boolean(),
@@ -135,7 +154,7 @@ export const RawPocketCastsDataSchema = z.object({
 // Raw data storage interface
 export interface RawDataStorage {
   saveRawData(type: 'starred' | 'listened', data: RawPocketCastsEpisode[]): Promise<void>
-  getRawData(type: 'starred' | 'listened'): Promise<RawPocketCastsEpisode[]>
+  getRawData(type: 'starred' | 'listened'): Promise<unknown[]>
 }
 
 // Raw storage interface
@@ -156,10 +175,11 @@ export interface ProjectStorage {
 // Episode Storage Interface
 export interface EpisodeStorage {
   saveEpisode(episode: Episode): Promise<void>
-  getEpisode(id: string): Promise<Episode>
+  getEpisode(id: string): Promise<Episode | null>
   listEpisodes(): Promise<Episode[]>
   updateEpisode(id: string, episode: Partial<Episode>): Promise<void>
   deleteEpisode(id: string): Promise<void>
+  getRawData(type: 'starred' | 'listened'): Promise<unknown[]>
 }
 
 // Asset (for downloaded content)
@@ -191,4 +211,9 @@ export interface PodcastStorage extends AssetStorage, RawDataStorage, EpisodeSto
   getProjectConfig(): Promise<ProjectConfig>
   updateProjectConfig(config: Partial<ProjectConfig>): Promise<void>
   isInitialized(): Promise<boolean>
+  
+  // Episode note operations
+  saveEpisodeNote(note: EpisodeNote): Promise<void>
+  getEpisodeNote(id: string): Promise<EpisodeNote | null>
+  listEpisodeNotes(): Promise<EpisodeNote[]>
 } 

@@ -26,17 +26,17 @@ export function createBrowseCommand(
         const episodes = await episodeService.listEpisodes();
 
         // Create a single render instance
-        const { waitUntilExit } = render(
+        const instance = render(
           React.createElement(PodcastBrowser, {
             episodes,
             onEpisodesUpdated: async (updatedEpisodes) => {
               // Just update the episodes prop
-              render(
+              instance.rerender(
                 React.createElement(PodcastBrowser, {
                   episodes: updatedEpisodes,
                   onEpisodesUpdated: async (newEpisodes) => {
                     // This will be called for subsequent updates
-                    render(
+                    instance.rerender(
                       React.createElement(PodcastBrowser, {
                         episodes: newEpisodes,
                         episodeService
@@ -52,10 +52,14 @@ export function createBrowseCommand(
         );
 
         // Wait for the app to exit
-        await waitUntilExit();
+        await instance.waitUntilExit();
       } catch (error) {
         logger.commandError('Failed to browse episodes:');
-        logger.error(error instanceof Error ? error.message : error);
+        if (error instanceof Error) {
+          logger.error(error.message);
+        } else {
+          logger.error(String(error));
+        }
         throw error;
       }
     });

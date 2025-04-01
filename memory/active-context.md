@@ -1,59 +1,29 @@
-# Active Context - Test Implementation Phase
+# Active Context - 2024-04-01 18:56 EDT
 
-## Current Status
-- Completed comprehensive test suite implementation
-- All core functionality tested
-- Integration tests verify end-to-end workflows
+## Current Focus
+Working on simplifying the podcast note loading architecture by consolidating functionality into the PocketCastsService.
 
-## Test Coverage
-1. Unit Tests
-   - Storage Layer: 34 tests
-   - Services: 30 tests
-   - CLI Commands: 12 tests
-   - UI Components: 9 tests
+## Current State
+- Implemented separate EpisodeNote storage and interfaces
+- Added note caching functionality
+- Identified need to simplify service architecture
 
-2. Integration Tests
-   - Sync to Browse workflow
-   - Error handling scenarios
-   - Data consistency checks
-   - Episode ordering verification
+## Current Issues
+1. Too many services being passed around (EpisodeService, PocketCastsService, StorageProvider)
+2. Complex note loading logic split between multiple components
+3. Race conditions in note loading
+4. Redundant state management
 
-## Component Test Details
-1. App Component: 1 test
-   - Basic rendering and initialization
-
-2. PodcastBrowser Component: 6 tests
-   - Episode list rendering
-   - Filtering functionality
-   - Sort order management
-   - Episode updates
-   - Error handling
-   - Help screen
-
-3. EpisodeService Tests
-   - Sync functionality
-   - Episode listing
-   - Data consistency
-   - Error handling
-
-4. BrowseCommand Tests
-   - Command initialization
-   - UI rendering
-   - Episode display
-   - Error scenarios
+## Planned Changes
+1. Move note loading/caching logic into PocketCastsService
+2. Simplify EpisodeDetails component to work directly with PocketCastsService
+3. Remove redundant service layers
+4. Improve error handling and retry logic
 
 ## Next Steps
-1. [ ] Implement logging system
-   - File output support
-   - Log level configuration
-   - Log rotation
+- Consolidate note loading logic into PocketCastsService
+- Update EpisodeDetails to use simplified service interface
+- Clean up unused code after consolidation
 
-2. [ ] Audio file download feature
-   - Download management
-   - Progress tracking
-   - Error handling
-
-## Current Blockers
-None - Test implementation phase completed successfully
-
-Last Updated: 2025-04-01 10:29:57 EDT 
+## Blockers
+None currently identified 

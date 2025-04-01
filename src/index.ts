@@ -11,6 +11,7 @@ import { sync } from './cli/commands/sync.js';
 import { createVersionCommand } from './cli/commands/version.js';
 import { createBrowseCommand } from './cli/commands/browse.js';
 import { createListCommand } from './cli/commands/list.js';
+import { createNotesCommand } from './cli/commands/notes.js';
 
 async function getPackageVersion(): Promise<string> {
   const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -36,6 +37,7 @@ async function main() {
     program.addCommand(sync);
     program.addCommand(createVersionCommand());
     program.addCommand(createListCommand(storageProvider));
+    program.addCommand(createNotesCommand(storageProvider, pocketCastsService));
     
     // Add browse command and set it as default
     const browseCommand = createBrowseCommand(storageProvider, pocketCastsService);

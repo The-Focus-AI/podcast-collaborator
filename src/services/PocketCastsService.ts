@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { Episode } from '@/storage/interfaces.js'
 import { OnePasswordService } from './OnePasswordService.js'
+import { logger } from '../utils/logger.js'
+import { v4 as uuidv4 } from 'uuid'
 
 // Raw API response types
 export interface PocketCastsResponse {
@@ -54,12 +56,13 @@ export interface PocketCastsService {
   getListenedEpisodes(): Promise<PocketCastsEpisode[]>
   getStarredEpisodes(): Promise<PocketCastsEpisode[]>
   convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Episode
+  getEpisodeNotes(episodeId: string): Promise<string>
 }
 
 export class PocketCastsServiceImpl implements PocketCastsService {
   private token: string | null = null
-  private readonly baseUrl = 'https://api.pocketcasts.com'
-  private readonly defaultHeaders: HeadersInit = {
+  private baseUrl = 'https://api.pocketcasts.com'
+  private defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
     'cache-control': 'no-cache'
@@ -68,6 +71,9 @@ export class PocketCastsServiceImpl implements PocketCastsService {
   constructor(private readonly onePasswordService: OnePasswordService) {}
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const requestId = uuidv4();
+    const startTime = Date.now();
+
     if (!this.token && !endpoint.includes('/user/login')) {
       throw new Error('Not logged in')
     }
@@ -79,48 +85,69 @@ export class PocketCastsServiceImpl implements PocketCastsService {
     }
 
     const url = `${this.baseUrl}${endpoint}`
+    const method = options?.method || 'GET'
 
-    const response = await fetch(url, {
-      ...options,
-      headers
-    })
-    
-    const rawText = await response.text()
-    console.log('Raw API response:', rawText)
-    
-    let data: any
-    const contentType = response.headers.get('content-type')
-    
     try {
-      // Only try to parse JSON if the content-type is application/json
-      if (contentType && contentType.includes('application/json')) {
-        data = JSON.parse(rawText)
+      logger.debug(`Making API request to ${endpoint}`, { requestId, source: 'pocketcasts' });
+
+      const response = await fetch(url, {
+        ...options,
+        headers
+      })
+    
+      const duration = Date.now() - startTime;
+      logger.api(method, endpoint, response.status, duration, { requestId, source: 'pocketcasts' });
+
+      // Log rate limit information if available
+      const rateLimit = {
+        remaining: response.headers.get('X-RateLimit-Remaining'),
+        limit: response.headers.get('X-RateLimit-Limit'),
+        reset: response.headers.get('X-RateLimit-Reset')
+      };
+
+      if (rateLimit.remaining) {
+        logger.debug(`Rate limit: ${rateLimit.remaining}/${rateLimit.limit} requests remaining`, { requestId });
+      }
+    
+      const rawText = await response.text()
+      let data: any
+      const contentType = response.headers.get('content-type')
+    
+      try {
+        if (contentType && contentType.includes('application/json')) {
+          data = JSON.parse(rawText)
+        } else {
+          data = { message: rawText }
+        }
+      } catch (error) {
+        data = { message: response.statusText || 'Unknown error' }
+      }
+
+      if (!response.ok) {
+        const error = new Error(data.message || `API error: ${response.statusText}`);
+        switch (response.status) {
+          case 401:
+            throw new Error('Invalid credentials or session expired')
+          case 403:
+            throw new Error('Access denied. Please check your account permissions.')
+          case 404:
+            throw new Error('Resource not found')
+          case 429:
+            throw new Error('Too many requests. Please try again later.')
+          default:
+            throw error;
+        }
+      }
+
+      return data as T
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        logger.error(error, { requestId, source: 'pocketcasts' });
       } else {
-        // For non-JSON responses, use the status text
-        data = { message: rawText }
+        logger.error('Unknown error occurred', { requestId, source: 'pocketcasts' });
       }
-    } catch (error) {
-      // If JSON parsing fails, use the response status text
-      data = { message: response.statusText || 'Unknown error' }
+      throw error;
     }
-
-    if (!response.ok) {
-      // Handle specific error cases
-      switch (response.status) {
-        case 401:
-          throw new Error('Invalid credentials or session expired')
-        case 403:
-          throw new Error('Access denied. Please check your account permissions.')
-        case 404:
-          throw new Error('Resource not found')
-        case 429:
-          throw new Error('Too many requests. Please try again later.')
-        default:
-          throw new Error(data.message || `API error: ${response.statusText}`)
-      }
-    }
-
-    return data as T
   }
 
   async login(): Promise<void> {
@@ -130,7 +157,7 @@ export class PocketCastsServiceImpl implements PocketCastsService {
       const requestBody = { 
         email: credentials.email, 
         password: credentials.password,
-        scope: 'webplayer'  // Simplify to just webplayer scope
+        scope: 'webplayer'
       }
       
       const response = await this.request<{ token: string; email: string }>('/user/login', {
@@ -146,10 +173,10 @@ export class PocketCastsServiceImpl implements PocketCastsService {
       }
 
       this.token = validatedResponse.token
-      console.log('Token received:', this.token)
-      console.log('Successfully logged in to PocketCasts')
+      logger.debug(`Token received: ${this.token.substring(0, 10)}...`, { source: 'pocketcasts' });
+      logger.info('Successfully logged in to PocketCasts', { source: 'pocketcasts' });
     } catch (error) {
-      console.error('Login error details:', error)
+      logger.error('Login error details:', { source: 'pocketcasts' });
       if (error instanceof TypeError && error.message.includes('fetch')) {
         throw new Error('Could not connect to PocketCasts. Please check your internet connection.')
       }
@@ -178,6 +205,10 @@ export class PocketCastsServiceImpl implements PocketCastsService {
   }
 
   convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Episode {
+    const progress = pocketcastsEpisode.duration > 0 
+      ? Math.min(1, pocketcastsEpisode.playedUpTo / pocketcastsEpisode.duration)
+      : 0;
+
     return {
       id: pocketcastsEpisode.uuid,
       title: pocketcastsEpisode.title,
@@ -190,11 +221,53 @@ export class PocketCastsServiceImpl implements PocketCastsService {
       isListened: pocketcastsEpisode.playingStatus === 3,
       playingStatus: pocketcastsEpisode.playingStatus,
       playedUpTo: pocketcastsEpisode.playedUpTo,
-      progress: pocketcastsEpisode.playedUpTo / pocketcastsEpisode.duration,
+      progress,
       lastListenedAt: pocketcastsEpisode.playedUpTo > 0 ? new Date() : undefined,
       syncedAt: new Date(),
       isDownloaded: false,
       hasTranscript: false
     };
   }
-} 
+
+  async getEpisodeNotes(episodeId: string): Promise<string> {
+    const requestId = uuidv4();
+    const startTime = Date.now();
+    
+    try {
+      logger.debug(`Fetching show notes for episode ${episodeId}`, { requestId, episodeId });
+      
+      const response = await fetch(`https://cache.pocketcasts.com/episode/show_notes/${episodeId}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      const duration = Date.now() - startTime;
+      
+      logger.api('GET', `/episode/show_notes/${episodeId}`, response.status, duration, { 
+        requestId, 
+        episodeId,
+        source: 'pocketcasts-cache' 
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          logger.warn(`Show notes not found for episode ${episodeId}`, { requestId, episodeId });
+          throw new Error('Resource not found');
+        }
+        throw new Error(`Failed to fetch show notes: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.show_notes;
+    } catch (error) {
+      logger.error(`Failed to fetch show notes for episode ${episodeId}`, { 
+        requestId, 
+        episodeId,
+        source: 'pocketcasts-cache'
+      });
+      throw error;
+    }
+  }
+}

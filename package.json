@@ -10,8 +10,8 @@
     "podcast-cli": "./dist/index.js"
   },
   "scripts": {
-    "dev": "tsx src/index.tsx",
-    "dev:watch": "tsx watch src/index.tsx",
+    "dev": "tsx src/index.ts",
+    "dev:watch": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
@@ -35,11 +35,12 @@
   "packageManager": "pnpm@10.6.1",
   "devDependencies": {
     "@eslint/js": "^9.23.0",
-    "@testing-library/react": "^16.2.0",
+    "@testing-library/react": "^14.2.1",
     "@types/chalk": "^2.2.4",
     "@types/commander": "^2.12.5",
     "@types/node": "^22.13.14",
-    "@types/react": "^19.0.12",
+    "@types/react": "^18.2.64",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
     "@vitest/ui": "^3.0.9",
@@ -47,6 +48,7 @@
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^5.2.0",
     "ink-testing-library": "^4.0.0",
+    "jsdom": "^26.0.0",
     "prettier": "^3.5.3",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
@@ -59,7 +61,9 @@
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "ink": "^5.2.0",
-    "react": "18.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "uuid": "^11.1.0",
     "zod": "^3.24.2"
   }
 }

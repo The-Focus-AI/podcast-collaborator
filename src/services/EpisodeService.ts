@@ -1,10 +1,14 @@
-import { Episode, EpisodeStorage } from '../storage/interfaces.js';
-import { PocketCastsService } from './PocketCastsService.js';
-import { StorageProvider } from '../storage/StorageProvider.js';
+import type { Episode, EpisodeNote, PodcastStorage } from '../storage/interfaces.js';
+import type { StorageProvider } from '../storage/StorageProvider.js';
+import type { PocketCastsService } from './PocketCastsService.js';
+import { logger } from '../utils/logger.js';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface EpisodeService {
-  syncEpisodes(): Promise<Episode[]>;
   listEpisodes(): Promise<Episode[]>;
+  loadShowNotes(episodeId: string): Promise<EpisodeNote>;
+  updateEpisode(episodeId: string, update: Partial<Episode>): Promise<Episode>;
+  getStorage(): PodcastStorage;
 }
 
 export class EpisodeServiceImpl implements EpisodeService {
@@ -13,89 +17,59 @@ export class EpisodeServiceImpl implements EpisodeService {
     private readonly pocketCastsService: PocketCastsService
   ) {}
 
-  async syncEpisodes(): Promise<Episode[]> {
-    const storage = this.storageProvider.getStorage() as unknown as EpisodeStorage;
-
-    // Login to PocketCasts
-    await this.pocketCastsService.login();
-
-    // Get listened episodes first to preserve order
-    const listenedEpisodes = await this.pocketCastsService.getListenedEpisodes();
-    const starredEpisodes = await this.pocketCastsService.getStarredEpisodes();
-
-    // Convert listened episodes first (maintaining order)
-    const convertedListenedEpisodes = listenedEpisodes.map(e => 
-      this.pocketCastsService.convertToEpisode(e)
-    );
-
-    // Convert starred episodes
-    const convertedStarredEpisodes = starredEpisodes.map(e => 
-      this.pocketCastsService.convertToEpisode(e)
-    );
-
-    // Create a map of listened episodes by ID for quick lookup
-    const listenedMap = new Map(convertedListenedEpisodes.map(e => [e.id, e]));
-
-    // Update listened episodes with starred status
-    convertedListenedEpisodes.forEach(episode => {
-      const starredVersion = convertedStarredEpisodes.find(e => e.id === episode.id);
-      if (starredVersion) {
-        episode.isStarred = true;
-      }
-    });
-
-    // Add any starred episodes that weren't in the listened list
-    const additionalStarredEpisodes = convertedStarredEpisodes.filter(
-      episode => !listenedMap.has(episode.id)
-    );
-
-    // Combine episodes, maintaining listened order and appending additional starred
-    const uniqueEpisodes = [...convertedListenedEpisodes, ...additionalStarredEpisodes];
-
-    // Save all episodes
-    for (const episode of uniqueEpisodes) {
-      await storage.saveEpisode(episode);
-    }
-
-    return uniqueEpisodes;
+  getStorage(): PodcastStorage {
+    return this.storageProvider.getStorage();
   }
 
   async listEpisodes(): Promise<Episode[]> {
     const storage = this.storageProvider.getStorage();
+    return storage.listEpisodes();
+  }
 
-    // Get both starred and listened episodes
-    const [starredEpisodes, listenedEpisodes] = await Promise.all([
-      storage.getRawData('starred'),
-      storage.getRawData('listened')
-    ]);
+  async loadShowNotes(episodeId: string): Promise<EpisodeNote> {
+    const storage = this.storageProvider.getStorage();
+    
+    // Check if we already have notes
+    let note = await storage.getEpisodeNote(episodeId);
+    if (note?.description) {
+      return note;
+    }
 
-    // Convert listened episodes first (maintaining order)
-    const convertedListenedEpisodes = listenedEpisodes.map(e => 
-      this.pocketCastsService.convertToEpisode(e)
-    );
+    // Initialize or update note
+    note = note || {
+      id: episodeId,
+      retryCount: 0,
+      loadedAt: new Date()
+    };
 
-    // Convert starred episodes
-    const convertedStarredEpisodes = starredEpisodes.map(e => 
-      this.pocketCastsService.convertToEpisode(e)
-    );
+    try {
+      note.lastAttempt = new Date();
+      note.retryCount++;
 
-    // Create a map of listened episodes by ID for quick lookup
-    const listenedMap = new Map(convertedListenedEpisodes.map(e => [e.id, e]));
+      const description = await this.pocketCastsService.getEpisodeNotes(episodeId);
+      
+      note.description = description;
+      note.error = undefined;
+      note.loadedAt = new Date();
+      
+      await storage.saveEpisodeNote(note);
+      return note;
+    } catch (error) {
+      note.error = error instanceof Error ? error.message : 'Failed to load show notes';
+      await storage.saveEpisodeNote(note);
+      throw error;
+    }
+  }
 
-    // Update listened episodes with starred status
-    convertedListenedEpisodes.forEach(episode => {
-      const starredVersion = convertedStarredEpisodes.find(e => e.id === episode.id);
-      if (starredVersion) {
-        episode.isStarred = true;
-      }
-    });
+  async updateEpisode(episodeId: string, update: Partial<Episode>): Promise<Episode> {
+    const storage = this.storageProvider.getStorage();
+    const episode = await storage.getEpisode(episodeId);
+    if (!episode) {
+      throw new Error(`Episode ${episodeId} not found`);
+    }
 
-    // Add any starred episodes that weren't in the listened list
-    const additionalStarredEpisodes = convertedStarredEpisodes.filter(
-      episode => !listenedMap.has(episode.id)
-    );
-
-    // Combine episodes, maintaining listened order and appending additional starred
-    return [...convertedListenedEpisodes, ...additionalStarredEpisodes];
+    const updatedEpisode = { ...episode, ...update };
+    await storage.saveEpisode(updatedEpisode);
+    return updatedEpisode;
   }
 } 

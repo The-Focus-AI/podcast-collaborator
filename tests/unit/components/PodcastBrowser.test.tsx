@@ -73,7 +73,8 @@ describe('PodcastBrowser', () => {
   beforeEach(() => {
     mockEpisodeService = {
       syncEpisodes: vi.fn().mockResolvedValue(mockEpisodes),
-      listEpisodes: vi.fn().mockResolvedValue(mockEpisodes)
+      listEpisodes: vi.fn().mockResolvedValue(mockEpisodes),
+      loadShowNotes: vi.fn().mockResolvedValue(mockEpisodes[0])
     };
   });
 
@@ -308,5 +309,88 @@ describe('PodcastBrowser', () => {
     expect(mainFrame).toContain('Test Episode 1');
     expect(mainFrame).toContain('Test Episode 2');
     expect(mainFrame).toContain('Test Episode 3');
+  });
+
+  it('loads show notes when selecting an episode without notes', async () => {
+    const episodeWithoutNotes = {
+      ...mockEpisodes[0],
+      description: undefined
+    };
+    
+    const updatedEpisode = {
+      ...episodeWithoutNotes,
+      description: 'Loaded show notes'
+    };
+
+    mockEpisodeService.loadShowNotes = vi.fn().mockResolvedValue(updatedEpisode);
+    const onEpisodesUpdated = vi.fn();
+
+    const { lastFrame } = render(
+      <PodcastBrowser 
+        episodes={[episodeWithoutNotes]} 
+        episodeService={mockEpisodeService}
+        onEpisodesUpdated={onEpisodesUpdated}
+      />
+    );
+
+    // Wait for loading state
+    const loadingShown = await waitForContent(() => lastFrame(), 'Loading show notes...');
+    expect(loadingShown).toBe(true);
+
+    // Wait for show notes to load
+    const notesLoaded = await waitForContent(() => lastFrame(), 'Loaded show notes');
+    expect(notesLoaded).toBe(true);
+
+    // Verify service was called
+    expect(mockEpisodeService.loadShowNotes).toHaveBeenCalledWith(episodeWithoutNotes.id);
+    
+    // Verify episodes were updated
+    expect(onEpisodesUpdated).toHaveBeenCalledWith([updatedEpisode]);
+  });
+
+  it('handles show notes loading failure gracefully', async () => {
+    const episodeWithoutNotes = {
+      ...mockEpisodes[0],
+      description: undefined
+    };
+
+    mockEpisodeService.loadShowNotes = vi.fn().mockRejectedValue(new Error('Failed to load notes'));
+    
+    const { lastFrame } = render(
+      <PodcastBrowser 
+        episodes={[episodeWithoutNotes]} 
+        episodeService={mockEpisodeService}
+      />
+    );
+
+    // Wait for loading state
+    const loadingShown = await waitForContent(() => lastFrame(), 'Loading show notes...');
+    expect(loadingShown).toBe(true);
+
+    // Wait for error state
+    const errorShown = await waitForContent(() => lastFrame(), 'No show notes available');
+    expect(errorShown).toBe(true);
+  });
+
+  it('does not load show notes for episodes that already have them', async () => {
+    const episodeWithNotes = {
+      ...mockEpisodes[0],
+      description: 'Existing show notes'
+    };
+
+    mockEpisodeService.loadShowNotes = vi.fn();
+
+    render(
+      <PodcastBrowser 
+        episodes={[episodeWithNotes]} 
+        episodeService={mockEpisodeService}
+      />
+    );
+
+    // Wait a bit to ensure no loading occurs
+    await waitForStateUpdate();
+
+    // Verify service was not called
+    expect(mockEpisodeService.loadShowNotes).not.toHaveBeenCalled();
   });
 }); 

@@ -575,3 +575,28 @@ Completed comprehensive test implementation for the podcast collaborator applica
 ### Next Steps
 1. Implement logging system with file output and rotation
 2. Add audio file download feature with progress tracking 
+
+## 2024-04-01 18:56 EDT - Service Architecture Simplification
+
+### Summary
+Working on simplifying the service architecture for note loading by consolidating functionality into PocketCastsService.
+
+### Current Progress
+- Implemented EpisodeNote type and storage
+- Added caching functionality for notes
+- Identified architectural improvements needed
+
+### Key Decisions
+1. Move note loading/caching logic into PocketCastsService
+2. Remove EpisodeService as a separate layer
+3. Simplify component interactions with services
+
+### Technical Details
+- Created separate storage for episode notes
+- Implemented retry and error tracking
+- Added note caching to prevent unnecessary API calls
+
+### Next Actions
+1. Update PocketCastsService to handle note management
+2. Simplify EpisodeDetails component
+3. Clean up unused code and interfaces 

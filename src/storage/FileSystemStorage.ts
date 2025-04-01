@@ -1,19 +1,22 @@
 import { mkdir, readFile, writeFile, readdir, rm, stat } from 'fs/promises'
 import { join } from 'path'
-import type { PodcastStorage, ProjectConfig, Asset, RawPocketCastsData, RawPocketCastsEpisode, Episode, EpisodeStorage } from './interfaces.js'
-import { ProjectConfigSchema, AssetSchema, RawPocketCastsDataSchema, EpisodeSchema } from './interfaces.js'
+import { existsSync } from 'fs'
+import type { PodcastStorage, ProjectConfig, Asset, RawPocketCastsData, RawPocketCastsEpisode, Episode, EpisodeStorage, EpisodeNote } from './interfaces.js'
+import { ProjectConfigSchema, AssetSchema, RawPocketCastsDataSchema, EpisodeSchema, EpisodeNoteSchema } from './interfaces.js'
 
 export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
   private readonly configPath: string
   private readonly assetsPath: string
   private readonly rawDataPath: string
   private readonly episodesPath: string
+  private readonly notesPath: string
 
   constructor(private readonly rootPath: string) {
     this.configPath = join(rootPath, 'config.json')
     this.assetsPath = join(rootPath, 'assets')
     this.rawDataPath = join(rootPath, 'raw')
     this.episodesPath = join(rootPath, 'episodes')
+    this.notesPath = join(rootPath, 'notes')
   }
 
   // Project Storage Implementation
@@ -30,6 +33,7 @@ export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
     await mkdir(this.rootPath, { recursive: true })
     await mkdir(this.assetsPath, { recursive: true })
     await mkdir(this.rawDataPath, { recursive: true })
+    await mkdir(this.notesPath, { recursive: true })
 
     // Save config
     await writeFile(this.configPath, JSON.stringify(config, null, 2))
@@ -324,5 +328,40 @@ export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
     } catch {
       throw new Error('Episode not found')
     }
+  }
+
+  private getEpisodeNotePath(id: string): string {
+    return join(this.notesPath, `${id}.json`)
+  }
+
+  async saveEpisodeNote(note: EpisodeNote): Promise<void> {
+    const parsed = EpisodeNoteSchema.parse(note)
+    const path = this.getEpisodeNotePath(note.id)
+    await writeFile(path, JSON.stringify(parsed, null, 2))
+  }
+
+  async getEpisodeNote(id: string): Promise<EpisodeNote | null> {
+    const path = this.getEpisodeNotePath(id)
+    if (!existsSync(path)) {
+      return null
+    }
+
+    const data = await readFile(path, 'utf-8')
+    const parsed = EpisodeNoteSchema.parse(JSON.parse(data))
+    return parsed
+  }
+
+  async listEpisodeNotes(): Promise<EpisodeNote[]> {
+    const files = await readdir(this.notesPath)
+    const notes: EpisodeNote[] = []
+
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue
+      const id = file.replace('.json', '')
+      const note = await this.getEpisodeNote(id)
+      if (note) notes.push(note)
+    }
+
+    return notes
   }
 } 

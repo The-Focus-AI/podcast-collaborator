@@ -1,50 +1,42 @@
 # Project Progress
 
-## Core Infrastructure
-- [X] Project initialization and setup
-- [X] Development environment configuration
-- [X] ESLint setup
-- [X] Basic command structure
+## Service Layer
+- [X] Basic PocketCasts API integration
+- [X] Authentication handling
+- [X] Episode syncing
+- [-] Note loading and caching
+  - [X] Basic note loading
+  - [X] Note storage implementation
+  - [-] Service consolidation
+  - [ ] Improved error handling
 
-## Command System
-- [X] Help command implementation
-- [X] Command registry
-- [X] Main app integration
-- [X] Command-line argument handling
-- [X] Version command implementation
+## UI Components
+- [X] PodcastBrowser implementation
+- [X] Episode list with filtering
+- [X] Episode details display
+- [-] Show notes display
+  - [X] Basic note display
+  - [-] Loading state management
+  - [-] Error handling
+  - [ ] Retry functionality
 
-## Storage Layer
-- [X] Define storage interfaces
-- [X] Create mock storage for testing
-- [X] Implement filesystem storage
-- [X] Create storage provider
-- [X] Storage tests passing
-- [X] Code organization with path aliases
-- [X] Integration with commands
+## Storage
+- [X] File system storage implementation
+- [X] Episode storage
+- [X] Configuration management
+- [X] Note storage implementation
 
-## PocketCasts Integration
-- [X] Sync command implementation
-- [ ] Audio file download support
-- [X] Progress indicators
-- [X] Error handling with retries
+## CLI Commands
+- [X] Browse command
+- [X] Sync command
+- [X] List command
+- [X] Version command
+- [X] Notes command
 
 ## Testing
-- [X] Storage Layer Tests (34 tests)
-- [X] Services Tests (30 tests)
-- [X] CLI Command Tests (12 tests)
-- [X] UI Component Tests (9 tests)
-- [X] Integration Tests (4 tests)
-  - [X] Sync to Browse workflow
-  - [X] Error handling
-  - [X] Data consistency
-  - [X] Episode ordering
+- [X] Storage tests
+- [X] Service tests
+- [X] Component tests
+- [X] Integration tests
 
-## Error Handling & Logging
-- [X] Logger utility implementation
-- [X] Error handling improvements
-- [X] Type safety enhancements
-- [ ] Log file output support
-- [ ] Log level configuration
-- [ ] Log rotation support
-
-Last Updated: 2025-04-01 10:29:57 EDT 
+Last Updated: 2024-04-01 18:56 EDT 

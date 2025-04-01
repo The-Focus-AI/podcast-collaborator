@@ -1,125 +1,205 @@
 import chalk from 'chalk'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-export type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'debug'
+// Get app root directory
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const LOG_DIR = path.join(__dirname, '../../logs')
+const LOG_FILE = path.join(LOG_DIR, 'app.log')
 
-interface LogOptions {
-  prefix?: string
-  timestamp?: boolean
-  json?: boolean
+// Ensure log directory exists
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR, { recursive: true })
 }
 
-class Logger {
-  private readonly defaultOptions: LogOptions = {
-    timestamp: false,
-    json: false
+interface LoggerConfig {
+  timestamp?: boolean;
+  logLevel?: boolean;
+  json?: boolean;
+  logToFile?: boolean;
+}
+
+interface LogContext {
+  requestId?: string;
+  episodeId?: string;
+  source?: string;
+  cached?: boolean;
+  prefix?: string;
+  json?: boolean;
+}
+
+export class Logger {
+  private config: LoggerConfig;
+
+  constructor(config: LoggerConfig = {}) {
+    this.config = {
+      logToFile: true,  // Enable file logging by default
+      ...config
+    };
   }
 
-  constructor(private options: LogOptions = {}) {
-    this.options = { ...this.defaultOptions, ...options }
+  private getTimestamp(): string {
+    return new Date().toISOString();
   }
 
-  private formatMessage(level: LogLevel, message: unknown, options: LogOptions = {}): string {
-    const opts = { ...this.options, ...options }
-    const timestamp = opts.timestamp ? `[${new Date().toISOString()}] ` : ''
-    const prefix = opts.prefix ? `${opts.prefix} ` : ''
-
-    if (opts.json) {
-      return JSON.stringify({
-        timestamp: new Date().toISOString(),
-        level,
-        prefix: opts.prefix,
-        message: this.stringifyMessage(message)
-      }, null, 2)
-    }
-
-    return `${timestamp}${prefix}${this.stringifyMessage(message)}`
+  private formatContext(context: LogContext): string {
+    const parts = [];
+    if (context.requestId) parts.push(`request=${context.requestId}`);
+    if (context.episodeId) parts.push(`episode=${context.episodeId}`);
+    if (context.source) parts.push(`source=${context.source}`);
+    if (context.cached !== undefined) parts.push(`cached=${context.cached}`);
+    return parts.length ? `[${parts.join(' ')}]` : '';
   }
 
-  private stringifyMessage(message: unknown): string {
-    if (message instanceof Error) {
-      return message.message
+  private safeStringify(obj: any): string {
+    try {
+      return JSON.stringify(obj, null, 2);
+    } catch (error) {
+      return '[object Object]';
     }
-    if (typeof message === 'string') {
-      return message
-    }
-    if (typeof message === 'object' && message !== null) {
+  }
+
+  private formatMessage(level: string, message: any, context: LogContext = {}, forConsole: boolean = true): string {
+    if (context.json || this.config.json) {
       try {
-        return JSON.stringify(message, null, 2)
+        return JSON.stringify({
+          timestamp: this.getTimestamp(),
+          level: level.toLowerCase(),
+          message: typeof message === 'string' ? message : this.safeStringify(message),
+          ...context
+        });
       } catch (error) {
-        // Handle circular references by falling back to String()
-        if (error instanceof TypeError && error.message.includes('circular')) {
-          return String(message)
-        }
-        throw error
+        return JSON.stringify({
+          timestamp: this.getTimestamp(),
+          level: level.toLowerCase(),
+          message: '[object Object]',
+          ...context
+        });
       }
     }
-    return String(message)
+
+    let formattedMessage = '';
+    
+    // Only add timestamp and level for console output
+    if (forConsole) {
+      if (this.config.timestamp) {
+        formattedMessage += `[${this.getTimestamp()}] `;
+      }
+      
+      if (this.config.logLevel) {
+        formattedMessage += `${level} `;
+      }
+    }
+
+    if (context.prefix) {
+      formattedMessage += `${context.prefix} `;
+    }
+
+    formattedMessage += this.formatContext(context);
+
+    if (Array.isArray(message)) {
+      formattedMessage += this.safeStringify(message);
+    } else if (typeof message === 'object' && message !== null) {
+      formattedMessage += this.safeStringify(message);
+    } else {
+      formattedMessage += String(message);
+    }
+
+    return formattedMessage.trim();
   }
 
-  private colorize(message: string, level: LogLevel): string {
-    switch (level) {
-      case 'success':
-        return chalk.green(message)
-      case 'warning':
-        return chalk.yellow(message)
-      case 'error':
-        return chalk.red(message)
-      case 'debug':
-        return chalk.gray(message)
-      default:
-        return message
+  private writeToFile(level: string, message: any, context: LogContext = {}) {
+    if (!this.config.logToFile) return;
+    
+    try {
+      // Format message without timestamp/level, as we'll add them here
+      const formattedMessage = this.formatMessage(level, message, context, false);
+      const logEntry = `${this.getTimestamp()} ${level} ${formattedMessage}\n`;
+      fs.appendFileSync(LOG_FILE, logEntry);
+    } catch (error) {
+      console.error(`Failed to write to log file: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  info(message: unknown, options: LogOptions = {}): void {
-    console.log(this.colorize(this.formatMessage('info', message, options), 'info'))
+  info(message: any, context: LogContext = {}) {
+    const formattedMessage = this.formatMessage('INFO', message, context);
+    console.log(formattedMessage);
+    this.writeToFile('INFO', message, context);
   }
 
-  success(message: unknown, options: LogOptions = {}): void {
-    console.log(this.colorize(this.formatMessage('success', message, options), 'success'))
+  warn(message: any, context: LogContext = {}) {
+    const formattedMessage = this.formatMessage('WARN', message, context);
+    console.warn(chalk.yellow(formattedMessage));
+    this.writeToFile('WARN', message, context);
   }
 
-  warning(message: unknown, options: LogOptions = {}): void {
-    console.warn(this.colorize(this.formatMessage('warning', message, options), 'warning'))
+  error(message: string | Error, context: LogContext = {}) {
+    const errorMessage = message instanceof Error ? message.message : message;
+    const formattedMessage = this.formatMessage('ERROR', errorMessage, context);
+    console.error(chalk.red(formattedMessage));
+    this.writeToFile('ERROR', errorMessage, context);
   }
 
-  error(message: unknown, options: LogOptions = {}): void {
-    console.error(this.colorize(this.formatMessage('error', message, options), 'error'))
-  }
-
-  debug(message: unknown, options: LogOptions = {}): void {
-    if (process.env.DEBUG) {
-      console.debug(this.colorize(this.formatMessage('debug', message, options), 'debug'))
+  debug(message: any, context: LogContext = {}) {
+    if (process.env.DEBUG === 'true') {
+      const formattedMessage = this.formatMessage('DEBUG', message, context);
+      console.debug(chalk.gray(formattedMessage));
+      this.writeToFile('DEBUG', message, context);
     }
   }
 
-  // Helper for command output
-  commandOutput(message: unknown, options: LogOptions = {}): void {
-    const opts = { ...options, prefix: '→' }
-    this.info(message, opts)
+  api(method: string, url: string, status: number, duration: number, context: LogContext = {}) {
+    const message = `${method} ${url} ${status} ${duration}ms`;
+    const formattedMessage = this.formatMessage('API', message, context);
+    const color = status >= 400 ? chalk.red : status >= 300 ? chalk.yellow : chalk.green;
+    console.log(color(formattedMessage));
+    this.writeToFile('API', message, context);
   }
 
-  // Helper for command success
-  commandSuccess(message: unknown, options: LogOptions = {}): void {
-    const opts = { ...options, prefix: '✓' }
-    this.success(message, opts)
+  cache(hit: boolean, key: string, context: LogContext = {}) {
+    const message = `${hit ? 'HIT' : 'MISS'} ${key}`;
+    const formattedMessage = this.formatMessage('CACHE', message, context);
+    const color = hit ? chalk.green : chalk.yellow;
+    console.log(color(formattedMessage));
+    this.writeToFile('CACHE', message, context);
   }
 
-  // Helper for command error
-  commandError(message: unknown, options: LogOptions = {}): void {
-    const opts = { ...options, prefix: '✗' }
-    this.error(message, opts)
+  success(message: any, context: LogContext = {}) {
+    const formattedMessage = this.formatMessage('SUCCESS', message, context);
+    console.log(chalk.green(formattedMessage));
+    this.writeToFile('SUCCESS', message, context);
   }
 
-  // Helper for command warning
-  commandWarning(message: unknown, options: LogOptions = {}): void {
-    const opts = { ...options, prefix: '⚠' }
-    this.warning(message, opts)
+  warning(message: any, context: LogContext = {}) {
+    const formattedMessage = this.formatMessage('WARNING', message, context);
+    console.warn(chalk.yellow(formattedMessage));
+    this.writeToFile('WARNING', message, context);
+  }
+
+  commandOutput(message: string, context: LogContext = {}) {
+    const formattedMessage = `→ ${message}`;
+    console.log(formattedMessage);
+    this.writeToFile('CMD', message, context);
+  }
+
+  commandSuccess(message: string, context: LogContext = {}) {
+    const formattedMessage = `✓ ${message}`;
+    console.log(chalk.green(formattedMessage));
+    this.writeToFile('CMD', message, context);
+  }
+
+  commandError(message: string, context: LogContext = {}) {
+    const formattedMessage = `✗ ${message}`;
+    console.error(chalk.red(formattedMessage));
+    this.writeToFile('CMD', message, context);
+  }
+
+  commandWarning(message: string, context: LogContext = {}) {
+    const formattedMessage = `⚠ ${message}`;
+    console.warn(chalk.yellow(formattedMessage));
+    this.writeToFile('CMD', message, context);
   }
 }
 
-// Export a default instance
-export const logger = new Logger()
-
-// Export the class for custom instances
-export { Logger } 
+export const logger = new Logger({ timestamp: true, logLevel: true }); // Default instance with timestamps and log levels enabled 

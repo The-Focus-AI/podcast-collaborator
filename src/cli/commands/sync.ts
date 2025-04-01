@@ -3,13 +3,14 @@ import { PocketCastsServiceImpl } from '@/services/PocketCastsService.js'
 import { OnePasswordService } from '@/services/OnePasswordService.js'
 import { StorageProvider } from '@/storage/StorageProvider.js'
 import type { RawPocketCastsEpisode } from '@/storage/interfaces.js'
+import { logger } from '@/utils/logger.js'
 
 export const sync = new Command('sync')
   .description('Sync episodes from PocketCasts')
   .action(async () => {
     try {
-      const service = new PocketCastsServiceImpl()
       const onePasswordService = new OnePasswordService()
+      const service = new PocketCastsServiceImpl(onePasswordService)
       const storageProvider = new StorageProvider()
       
       // Initialize storage
@@ -17,24 +18,28 @@ export const sync = new Command('sync')
       const storage = storageProvider.getStorage()
       
       // Login first
-      const credentials = await onePasswordService.getCredentials()
-      await service.login(credentials.email, credentials.password)
+      logger.info('Logging in to PocketCasts...')
+      await service.login()
 
       // Get starred episodes
-      console.log('Fetching starred episodes...')
+      logger.info('Fetching starred episodes...')
       const starredEpisodes = await service.getStarredEpisodes() as RawPocketCastsEpisode[]
       await storage.saveRawData('starred', starredEpisodes)
-      console.log(`Found ${starredEpisodes.length} starred episodes`)
+      logger.info(`Found ${starredEpisodes.length} starred episodes`)
 
       // Get listened episodes
-      console.log('Fetching listened episodes...')
+      logger.info('Fetching listened episodes...')
       const listenedEpisodes = await service.getListenedEpisodes() as RawPocketCastsEpisode[]
       await storage.saveRawData('listened', listenedEpisodes)
-      console.log(`Found ${listenedEpisodes.length} listened episodes`)
+      logger.info(`Found ${listenedEpisodes.length} listened episodes`)
 
-      console.log('Raw episode data has been saved')
-    } catch (error) {
-      console.error('Error syncing episodes:', error)
+      logger.info('Raw episode data has been saved')
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        logger.error(error, { source: 'sync' });
+      } else {
+        logger.error('Unknown error during sync', { source: 'sync' });
+      }
       process.exit(1)
     }
   }) 

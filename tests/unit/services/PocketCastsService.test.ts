@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { PocketCastsServiceImpl, PocketCastsEpisode, PocketCastsResponse } from '@/services/PocketCastsService.js'
+import { OnePasswordService } from '@/services/OnePasswordService.js'
 
 describe('PocketCastsService', () => {
   let service: PocketCastsServiceImpl
   let mockFetch: ReturnType<typeof vi.fn>
+  let mockOnePasswordService: OnePasswordService
 
   // Example response from pocketcasts.json
   const mockResponse: PocketCastsResponse = {
@@ -42,7 +44,16 @@ describe('PocketCastsService', () => {
   beforeEach(() => {
     mockFetch = vi.fn()
     global.fetch = mockFetch
-    service = new PocketCastsServiceImpl()
+
+    // Setup mock OnePasswordService
+    mockOnePasswordService = {
+      getCredentials: vi.fn().mockResolvedValue({
+        email: 'test@example.com',
+        password: 'password'
+      })
+    }
+
+    service = new PocketCastsServiceImpl(mockOnePasswordService)
   })
 
   describe('login', () => {
@@ -58,7 +69,7 @@ describe('PocketCastsService', () => {
         text: () => Promise.resolve(JSON.stringify(mockResponse))
       })
 
-      await service.login('test@example.com', 'password')
+      await service.login()
 
       expect(mockFetch).toHaveBeenCalledWith('https://api.pocketcasts.com/user/login', {
         method: 'POST',
@@ -83,8 +94,7 @@ describe('PocketCastsService', () => {
         text: () => Promise.resolve('{"error": "Invalid credentials"}')
       })
 
-      await expect(service.login('test@example.com', 'wrong-password'))
-        .rejects.toThrow('Invalid credentials or session expired')
+      await expect(service.login()).rejects.toThrow('Invalid credentials or session expired')
     })
   })
 
@@ -96,7 +106,7 @@ describe('PocketCastsService', () => {
         headers: new Headers({ 'content-type': 'application/json' }),
         text: () => Promise.resolve(JSON.stringify({ token: 'test-token', email: 'test@example.com' }))
       })
-      await service.login('test@example.com', 'password')
+      await service.login()
     })
 
     it('should fetch and return listened episodes', async () => {
@@ -122,7 +132,7 @@ describe('PocketCastsService', () => {
     })
 
     it('should throw error when not logged in', async () => {
-      service = new PocketCastsServiceImpl() // Reset service without login
+      service = new PocketCastsServiceImpl(mockOnePasswordService) // Reset service without login
       await expect(service.getListenedEpisodes()).rejects.toThrow('Not logged in')
     })
 
@@ -147,7 +157,7 @@ describe('PocketCastsService', () => {
         headers: new Headers({ 'content-type': 'application/json' }),
         text: () => Promise.resolve(JSON.stringify({ token: 'test-token', email: 'test@example.com' }))
       })
-      await service.login('test@example.com', 'password')
+      await service.login()
     })
 
     it('should fetch and return starred episodes', async () => {
@@ -173,7 +183,7 @@ describe('PocketCastsService', () => {
     })
 
     it('should throw error when not logged in', async () => {
-      service = new PocketCastsServiceImpl() // Reset service without login
+      service = new PocketCastsServiceImpl(mockOnePasswordService) // Reset service without login
       await expect(service.getStarredEpisodes()).rejects.toThrow('Not logged in')
     })
   })
@@ -181,25 +191,97 @@ describe('PocketCastsService', () => {
   describe('convertToEpisode', () => {
     it('should convert PocketCasts episode to internal Episode format', () => {
       const pocketcastsEpisode = mockResponse.episodes[0]
-      const result = PocketCastsServiceImpl.convertToEpisode(pocketcastsEpisode)
+      const result = service.convertToEpisode(pocketcastsEpisode)
 
       expect(result).toEqual({
         id: pocketcastsEpisode.uuid,
         title: pocketcastsEpisode.title,
         url: pocketcastsEpisode.url,
         podcastName: pocketcastsEpisode.podcastTitle,
+        podcastAuthor: pocketcastsEpisode.author || 'Unknown',
         publishDate: new Date(pocketcastsEpisode.published),
         duration: pocketcastsEpisode.duration,
         isStarred: pocketcastsEpisode.starred,
-        isListened: pocketcastsEpisode.status === 'played',
+        isListened: pocketcastsEpisode.playingStatus === 3,
         progress: pocketcastsEpisode.playedUpTo / pocketcastsEpisode.duration,
         lastListenedAt: expect.any(Date),
-        description: '',
-        notes: '',
+        playingStatus: pocketcastsEpisode.playingStatus,
+        playedUpTo: pocketcastsEpisode.playedUpTo,
         syncedAt: expect.any(Date),
         isDownloaded: false,
         hasTranscript: false
       })
     })
   })
+
+  describe('getEpisodeNotes', () => {
+    const episodeId = 'test-episode-123';
+    const mockShowNotes = {
+      show_notes: '<p>These are the show notes</p>'
+    };
+
+    beforeEach(async () => {
+      // Login first
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: () => Promise.resolve(JSON.stringify({ token: 'test-token', email: 'test@example.com' }))
+      });
+      await service.login();
+    });
+
+    it('should fetch show notes with correct URL and authentication', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve(mockShowNotes)
+      });
+
+      const result = await service.getEpisodeNotes(episodeId);
+
+      // Verify the second call (first call is for login)
+      expect(mockFetch.mock.calls[1][0]).toBe(
+        `https://cache.pocketcasts.com/episode/show_notes/${episodeId}`
+      );
+      expect(mockFetch.mock.calls[1][1]).toEqual(
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          })
+        })
+      );
+
+      expect(result).toBe(mockShowNotes.show_notes);
+    });
+
+    it('should return empty string when no show notes available', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve({ show_notes: null })
+      });
+
+      const result = await service.getEpisodeNotes(episodeId);
+      expect(result).toBe('');
+    });
+
+    it('should throw error when not logged in', async () => {
+      service = new PocketCastsServiceImpl(mockOnePasswordService); // Reset service without login
+      await expect(service.getEpisodeNotes(episodeId)).rejects.toThrow('Not logged in');
+    });
+
+    it('should handle API errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => Promise.resolve({ error: 'Episode not found' })
+      });
+
+      await expect(service.getEpisodeNotes(episodeId)).rejects.toThrow('Resource not found');
+    });
+  });
 })
