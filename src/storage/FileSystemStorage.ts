@@ -335,33 +335,73 @@ export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
   }
 
   async saveEpisodeNote(note: EpisodeNote): Promise<void> {
+    if (!await this.isInitialized()) {
+      throw new Error('Project not initialized')
+    }
+
+    // Ensure notes directory exists
+    await mkdir(this.notesPath, { recursive: true })
+
+    // Validate the note as is - no need to convert dates since they're already Date objects
     const parsed = EpisodeNoteSchema.parse(note)
     const path = this.getEpisodeNotePath(note.id)
     await writeFile(path, JSON.stringify(parsed, null, 2))
   }
 
   async getEpisodeNote(id: string): Promise<EpisodeNote | null> {
+    if (!await this.isInitialized()) {
+      throw new Error('Project not initialized')
+    }
+
     const path = this.getEpisodeNotePath(id)
     if (!existsSync(path)) {
       return null
     }
 
-    const data = await readFile(path, 'utf-8')
-    const parsed = EpisodeNoteSchema.parse(JSON.parse(data))
-    return parsed
+    try {
+      const data = await readFile(path, 'utf-8')
+      const rawNote = JSON.parse(data)
+
+      // Convert date strings to Date objects when reading from JSON
+      const noteWithDates = {
+        ...rawNote,
+        loadedAt: new Date(rawNote.loadedAt),
+        lastAttempt: rawNote.lastAttempt ? new Date(rawNote.lastAttempt) : undefined
+      }
+
+      return EpisodeNoteSchema.parse(noteWithDates)
+    } catch (error) {
+      console.warn(`Failed to load note from ${path}:`, error)
+      return null
+    }
   }
 
   async listEpisodeNotes(): Promise<EpisodeNote[]> {
-    const files = await readdir(this.notesPath)
-    const notes: EpisodeNote[] = []
-
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue
-      const id = file.replace('.json', '')
-      const note = await this.getEpisodeNote(id)
-      if (note) notes.push(note)
+    if (!await this.isInitialized()) {
+      throw new Error('Project not initialized')
     }
 
-    return notes
+    try {
+      // Ensure notes directory exists
+      await mkdir(this.notesPath, { recursive: true })
+
+      const files = await readdir(this.notesPath)
+      const notes: EpisodeNote[] = []
+
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue
+        const id = file.replace('.json', '')
+        try {
+          const note = await this.getEpisodeNote(id)
+          if (note) notes.push(note)
+        } catch (error) {
+          console.warn(`Failed to load note from ${file}:`, error)
+        }
+      }
+
+      return notes
+    } catch {
+      return [] // Return empty array if directory doesn't exist or is empty
+    }
   }
 } 

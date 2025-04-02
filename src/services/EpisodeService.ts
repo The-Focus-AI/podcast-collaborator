@@ -28,36 +28,44 @@ export class EpisodeServiceImpl implements EpisodeService {
 
   async loadShowNotes(episodeId: string): Promise<EpisodeNote> {
     const storage = this.storageProvider.getStorage();
+    let existingNote: EpisodeNote | null = null;
     
-    // Check if we already have notes
-    let note = await storage.getEpisodeNote(episodeId);
-    if (note?.description) {
-      return note;
-    }
-
-    // Initialize or update note
-    note = note || {
-      id: episodeId,
-      retryCount: 0,
-      loadedAt: new Date()
-    };
-
     try {
-      note.lastAttempt = new Date();
-      note.retryCount++;
+      // Check if we already have valid notes
+      existingNote = await storage.getEpisodeNote(episodeId);
+      if (existingNote?.description) {
+        return existingNote;
+      }
 
+      // Initialize or update note
+      const note: EpisodeNote = {
+        id: episodeId,
+        retryCount: (existingNote?.retryCount || 0) + 1,
+        loadedAt: new Date(),
+        lastAttempt: new Date()
+      };
+
+      // Try to load from API
       const description = await this.pocketCastsService.getEpisodeNotes(episodeId);
-      
       note.description = description;
       note.error = undefined;
-      note.loadedAt = new Date();
       
+      // Save successful note
       await storage.saveEpisodeNote(note);
       return note;
     } catch (error) {
-      note.error = error instanceof Error ? error.message : 'Failed to load show notes';
-      await storage.saveEpisodeNote(note);
-      throw error;
+      // Create error note
+      const errorNote: EpisodeNote = {
+        id: episodeId,
+        error: error instanceof Error ? error.message : 'Failed to load show notes',
+        loadedAt: new Date(),
+        lastAttempt: new Date(),
+        retryCount: (existingNote?.retryCount || 0) + 1
+      };
+      
+      // Save error state
+      await storage.saveEpisodeNote(errorNote);
+      return errorNote;
     }
   }
 

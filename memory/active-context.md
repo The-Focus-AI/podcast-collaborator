@@ -1,29 +1,38 @@
-# Active Context - 2024-04-01 18:56 EDT
+# Active Context - 2024-04-01 19:30 EDT
 
 ## Current Focus
-Working on simplifying the podcast note loading architecture by consolidating functionality into the PocketCastsService.
+Working on improving the podcast note loading system with better error handling and data consistency.
 
 ## Current State
-- Implemented separate EpisodeNote storage and interfaces
-- Added note caching functionality
-- Identified need to simplify service architecture
+- Fixed date handling in note storage and loading
+- Improved retry count tracking
+- Added proper directory checks
+- Consolidated note loading logic
 
-## Current Issues
-1. Too many services being passed around (EpisodeService, PocketCastsService, StorageProvider)
-2. Complex note loading logic split between multiple components
-3. Race conditions in note loading
-4. Redundant state management
-
-## Planned Changes
-1. Move note loading/caching logic into PocketCastsService
-2. Simplify EpisodeDetails component to work directly with PocketCastsService
-3. Remove redundant service layers
-4. Improve error handling and retry logic
+## Recent Improvements
+1. Fixed date handling:
+   - Proper JSON serialization/deserialization
+   - No redundant date conversions
+   - Consistent Date object handling
+2. Better error handling:
+   - Directory existence checks
+   - Proper error state persistence
+   - Improved retry tracking
+3. Code organization:
+   - Consolidated note loading logic
+   - Cleaner service interfaces
+   - Better separation of concerns
 
 ## Next Steps
-- Consolidate note loading logic into PocketCastsService
-- Update EpisodeDetails to use simplified service interface
-- Clean up unused code after consolidation
+1. Test note loading with various edge cases
+2. Add logging for note loading failures
+3. Consider implementing note refresh mechanism
+4. Add note content validation
 
 ## Blockers
-None currently identified 
+None currently identified
+
+## Notes
+- Consider adding a note expiration/refresh mechanism
+- May need to implement rate limiting for API calls
+- Should add metrics for note loading success/failure rates 

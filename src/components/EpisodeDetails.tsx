@@ -40,30 +40,9 @@ export const EpisodeDetails: FC<EpisodeDetailsProps> = ({
       setIsLoadingNotes(true);
 
       try {
-        // First try to get existing note from storage
-        const storage = episodeService.getStorage();
-        const existingNote = await storage.getEpisodeNote(episode.id);
-        
-        if (existingNote?.description && !isCancelled) {
-          setEpisodeNote(existingNote);
-          return;
-        }
-
-        // If no existing note or no description, load from API
         const note = await episodeService.loadShowNotes(episode.id);
         if (!isCancelled) {
           setEpisodeNote(note);
-        }
-      } catch (error) {
-        if (!isCancelled) {
-          const errorNote = {
-            id: episode.id,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            loadedAt: new Date(),
-            retryCount: 0,
-          } as EpisodeNote;
-          
-          setEpisodeNote(errorNote);
         }
       } finally {
         if (!isCancelled) {
