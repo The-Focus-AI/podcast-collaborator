@@ -139,24 +139,29 @@ export const EpisodeList: FC<EpisodeListProps> = ({
   }
 
   return (
-    <Box borderStyle="single" borderColor={isFocused ? 'blue' : undefined}>
+    <Box 
+      borderStyle="single" 
+      borderColor={isFocused ? 'blue' : undefined}
+      flexGrow={1}
+      height="100%"
+    >
       {episodes.length === 0 ? (
-        <Box>
+        <Box flexGrow={1}>
           <Text dimColor>No episodes found. Press 's' to sync with PocketCasts.</Text>
         </Box>
       ) : sortedEpisodes.length === 0 ? (
-        <Box>
+        <Box flexGrow={1}>
           <Text dimColor>No episodes match the current filter.</Text>
         </Box>
       ) : (
-        <Box flexDirection="column">
+        <Box flexDirection="column" flexGrow={1}>
           {getVisibleEpisodes(sortedEpisodes, selectedIndex, process.stdout.rows - 4).map((episode, visibleIndex) => {
             const absoluteIndex = sortedEpisodes.indexOf(episode);
             const isSelected = absoluteIndex === selectedIndex;
             const availableWidth = process.stdout.columns * 0.5 - 12 - 4 - 4;
             
             return (
-              <Box key={episode.id}>
+              <Box key={episode.id} flexShrink={0}>
                 <Text color={isSelected ? 'green' : undefined}>
                   {chalk.blue(formatDate(episode.publishDate).slice(0, 12).padEnd(12))}
                   {getStatusSymbols(episode)}

@@ -1,15 +1,38 @@
 import { mkdir, readFile, writeFile, readdir, rm, stat } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
-import type { PodcastStorage, ProjectConfig, Asset, RawPocketCastsData, RawPocketCastsEpisode, Episode, EpisodeStorage, EpisodeNote } from './interfaces.js'
-import { ProjectConfigSchema, AssetSchema, RawPocketCastsDataSchema, EpisodeSchema, EpisodeNoteSchema } from './interfaces.js'
+import type { 
+  PodcastStorage, 
+  ProjectConfig, 
+  Asset, 
+  RawPocketCastsData, 
+  RawPocketCastsEpisode, 
+  Episode, 
+  EpisodeStorage, 
+  EpisodeNote,
+  TranscriptionStatus,
+  TranscriptionStorage,
+  Transcription
+} from './interfaces.js'
+import { 
+  ProjectConfigSchema, 
+  AssetSchema, 
+  RawPocketCastsDataSchema, 
+  EpisodeSchema, 
+  EpisodeNoteSchema,
+  TranscriptionSchema,
+  TranscriptionStatusSchema 
+} from './interfaces.js'
+import { extname } from 'path'
+import { v4 as uuidv4 } from 'uuid'
 
-export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
+export class FileSystemStorage implements PodcastStorage, EpisodeStorage, TranscriptionStorage {
   private readonly configPath: string
   private readonly assetsPath: string
   private readonly rawDataPath: string
   private readonly episodesPath: string
   private readonly notesPath: string
+  private readonly transcriptionsPath: string
 
   constructor(private readonly rootPath: string) {
     this.configPath = join(rootPath, 'config.json')
@@ -17,6 +40,7 @@ export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
     this.rawDataPath = join(rootPath, 'raw')
     this.episodesPath = join(rootPath, 'episodes')
     this.notesPath = join(rootPath, 'notes')
+    this.transcriptionsPath = join(rootPath, 'transcriptions')
   }
 
   // Project Storage Implementation
@@ -34,6 +58,7 @@ export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
     await mkdir(this.assetsPath, { recursive: true })
     await mkdir(this.rawDataPath, { recursive: true })
     await mkdir(this.notesPath, { recursive: true })
+    await mkdir(this.transcriptionsPath, { recursive: true })
 
     // Save config
     await writeFile(this.configPath, JSON.stringify(config, null, 2))
@@ -144,11 +169,29 @@ export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
       const assets: Asset[] = []
 
       for (const file of files) {
-        if (!file.endsWith('.json')) continue
-        const name = file.replace('.json', '')
         try {
-          const asset = await this.getAsset(episodeId, name)
-          assets.push(asset)
+          const filePath = join(episodeAssetsDir, file);
+          const stats = await stat(filePath);
+          if (!stats.isFile()) continue;
+
+          // Determine MIME type based on extension
+          const ext = extname(file).toLowerCase();
+          let type = 'application/octet-stream';
+          if (ext === '.mp3') type = 'audio/mpeg';
+          else if (ext === '.wav') type = 'audio/wav';
+          else if (ext === '.json') type = 'application/json';
+
+          const data = await readFile(filePath);
+          
+          assets.push({
+            id: uuidv4(),
+            episodeId,
+            type,
+            name: file,
+            data,
+            createdAt: stats.birthtime,
+            updatedAt: stats.mtime
+          });
         } catch {
           // Skip invalid assets
           continue
@@ -404,5 +447,166 @@ export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
     } catch {
       return [] // Return empty array if directory doesn't exist or is empty
     }
+  }
+
+  // Transcription Storage Implementation
+  private getTranscriptionPath(id: string): string {
+    return join(this.transcriptionsPath, `${id}.json`)
+  }
+
+  async saveTranscription(transcription: TranscriptionStatus): Promise<void> {
+    if (!await this.isInitialized()) {
+      throw new Error('Project not initialized')
+    }
+
+    // Validate transcription
+    TranscriptionStatusSchema.parse(transcription)
+
+    // Ensure transcriptions directory exists
+    await mkdir(this.transcriptionsPath, { recursive: true })
+
+    // Save transcription
+    const transcriptionPath = this.getTranscriptionPath(transcription.id)
+    await writeFile(transcriptionPath, JSON.stringify(transcription, null, 2))
+  }
+
+  async getTranscription(id: string): Promise<TranscriptionStatus | null> {
+    if (!await this.isInitialized()) {
+      throw new Error('Project not initialized')
+    }
+
+    try {
+      const transcriptionPath = this.getTranscriptionPath(id)
+      const transcriptionData = await readFile(transcriptionPath, 'utf-8')
+      const transcription = JSON.parse(transcriptionData)
+      
+      // Convert dates
+      transcription.metadata.createdAt = new Date(transcription.metadata.createdAt)
+      transcription.metadata.updatedAt = new Date(transcription.metadata.updatedAt)
+      if (transcription.metadata.completedAt) {
+        transcription.metadata.completedAt = new Date(transcription.metadata.completedAt)
+      }
+      
+      return TranscriptionStatusSchema.parse(transcription)
+    } catch {
+      return null
+    }
+  }
+
+  async getTranscriptionByEpisodeId(episodeId: string): Promise<TranscriptionStatus | null> {
+    if (!await this.isInitialized()) {
+      throw new Error('Project not initialized')
+    }
+
+    try {
+      const files = await readdir(this.transcriptionsPath)
+      for (const file of files) {
+        try {
+          const transcriptionPath = join(this.transcriptionsPath, file)
+          const transcriptionData = await readFile(transcriptionPath, 'utf-8')
+          const transcription = JSON.parse(transcriptionData)
+          
+          if (transcription.episodeId === episodeId) {
+            // Convert dates
+            transcription.metadata.createdAt = new Date(transcription.metadata.createdAt)
+            transcription.metadata.updatedAt = new Date(transcription.metadata.updatedAt)
+            if (transcription.metadata.completedAt) {
+              transcription.metadata.completedAt = new Date(transcription.metadata.completedAt)
+            }
+            
+            return TranscriptionStatusSchema.parse(transcription)
+          }
+        } catch {
+          continue
+        }
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  async listTranscriptions(): Promise<TranscriptionStatus[]> {
+    if (!await this.isInitialized()) {
+      throw new Error('Project not initialized')
+    }
+
+    try {
+      const files = await readdir(this.transcriptionsPath)
+      const transcriptions: TranscriptionStatus[] = []
+
+      for (const file of files) {
+        try {
+          const transcriptionPath = join(this.transcriptionsPath, file)
+          const transcriptionData = await readFile(transcriptionPath, 'utf-8')
+          const transcription = JSON.parse(transcriptionData)
+          
+          // Convert dates
+          transcription.metadata.createdAt = new Date(transcription.metadata.createdAt)
+          transcription.metadata.updatedAt = new Date(transcription.metadata.updatedAt)
+          if (transcription.metadata.completedAt) {
+            transcription.metadata.completedAt = new Date(transcription.metadata.completedAt)
+          }
+          
+          transcriptions.push(TranscriptionStatusSchema.parse(transcription))
+        } catch {
+          continue
+        }
+      }
+
+      return transcriptions
+    } catch {
+      return []
+    }
+  }
+
+  async deleteTranscription(id: string): Promise<void> {
+    if (!await this.isInitialized()) {
+      throw new Error('Project not initialized')
+    }
+
+    const transcriptionPath = this.getTranscriptionPath(id)
+    try {
+      await rm(transcriptionPath)
+    } catch {
+      throw new Error('Transcription not found')
+    }
+  }
+
+  async updateTranscriptionStatus(
+    id: string,
+    status: TranscriptionStatus['status'],
+    error?: string
+  ): Promise<void> {
+    const transcription = await this.getTranscription(id)
+    if (!transcription) {
+      throw new Error('Transcription not found')
+    }
+
+    transcription.status = status
+    transcription.metadata.updatedAt = new Date()
+    if (status === 'completed') {
+      transcription.metadata.completedAt = new Date()
+    } else if (status === 'failed' && error) {
+      transcription.metadata.error = error
+    }
+
+    await this.saveTranscription(transcription)
+  }
+
+  
+  async updateMetadata(
+    id: string,
+    metadata: Partial<TranscriptionStatus ['metadata']>
+  ): Promise<void> {
+    const transcription = await this.getTranscription(id)
+    if (!transcription) {
+      throw new Error('Transcription not found')
+    }
+
+    Object.assign(transcription.metadata, metadata)
+    transcription.metadata.updatedAt = new Date()
+
+    await this.saveTranscription(transcription)
   }
 } 

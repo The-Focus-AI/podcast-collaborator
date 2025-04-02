@@ -214,8 +214,111 @@ export interface AssetStorage {
   getAssetPath(episodeId: string, name: string): string // Added for direct path access
 }
 
+// Transcription schemas
+export const TranscriptionSchema = z.object({
+  segments: z.array(
+    z.object({
+      timestamp: z.string().describe("Timestamp in MM:SS format indicating when this segment occurs in the audio"),
+
+      speaker: z.string().min(1).describe("Name or identifier of the person speaking in this segment"),
+
+      advertisement: z.boolean().describe("Indicates if this segment is part of an advertisement or sponsored content"),
+
+      guest_interview: z.boolean().describe("Indicates if this segment is part of a guest interview"),
+
+      topics: z.array(z.string().min(1)).min(1).describe("List of topics or themes discussed in this segment"),
+
+      spoken_text: z.string().min(1).describe("The actual transcribed text of what was spoken in this segment"),
+    }).describe("A segment of transcribed audio with metadata")
+  ),
+});
+
+export const TranscriptionStatusSchema = z.object({
+  id: z.string()
+    .min(1)
+    .describe("Unique identifier for this transcription"),
+  
+  episodeId: z.string()
+    .min(1)
+    .describe("Reference to the podcast episode this transcription belongs to"),
+  
+  status: z.enum(['pending', 'processing', 'completed', 'failed'])
+    .describe("Current status of the transcription process"),
+  
+  model: z.string()
+    .min(1)
+    .describe("The AI model used for transcription"),
+
+  transcription: TranscriptionSchema.optional(),
+  metadata: z.object({
+    duration: z.number()
+      .optional()
+      .describe("Total duration of the audio in seconds"),
+    
+    wordCount: z.number()
+    .optional()
+      .describe("Total number of words in the transcription"),
+    
+    createdAt: z.date()
+      .describe("When the transcription was first created"),
+    
+    updatedAt: z.date()
+      .describe("When the transcription was last modified"),
+    
+    completedAt: z.date()
+      .optional()
+      .describe("When the transcription process finished successfully"),
+    
+    error: z.string()
+      .optional()
+      .describe("Error message if the transcription failed")
+  }).describe("Metadata about the transcription process and result"),
+  
+  summary: z.string()
+    .optional()
+    .describe("AI-generated summary of the transcribed content"),
+  
+  keywords: z.array(z.string())
+    .optional()
+    .describe("AI-extracted keywords or key phrases from the content")
+}).describe("Complete transcription record including segments and metadata");
+
+// Extract types from Zod schemas
+export type Transcription = z.infer<typeof TranscriptionSchema>;
+export type TranscriptionStatus = z.infer<typeof TranscriptionStatusSchema>;
+
+// Storage interface for transcriptions
+export interface TranscriptionStorage {
+  // Core operations
+  saveTranscription(transcription: TranscriptionStatus): Promise<void>;
+  getTranscription(id: string): Promise<TranscriptionStatus | null>;
+  getTranscriptionByEpisodeId(episodeId: string): Promise<TranscriptionStatus | null>;
+  listTranscriptions(): Promise<TranscriptionStatus[]>;
+  deleteTranscription(id: string): Promise<void>;
+  
+  // Status updates
+  updateTranscriptionStatus(
+    id: string, 
+    status: TranscriptionStatus['status'], 
+    error?: string
+  ): Promise<void>;
+  
+  
+  // Metadata updates
+  updateMetadata(
+    id: string, 
+    metadata: Partial<TranscriptionStatus['metadata']>
+  ): Promise<void>;
+  
+
+}
+
 // Combined interface
-export interface PodcastStorage extends AssetStorage, RawDataStorage, EpisodeStorage {
+export interface PodcastStorage extends 
+  AssetStorage, 
+  RawDataStorage, 
+  EpisodeStorage,
+  TranscriptionStorage {
   initializeProject(config: ProjectConfig): Promise<void>
   getProjectConfig(): Promise<ProjectConfig>
   updateProjectConfig(config: Partial<ProjectConfig>): Promise<void>

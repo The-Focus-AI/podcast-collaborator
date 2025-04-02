@@ -431,3 +431,86 @@ Validation Criteria:
 - [X] Proper error handling
 - [X] Type safety maintained
 - [X] Clear documentation 
+
+## Transcription Service Implementation
+
+### Overview
+Adding transcription capabilities using Vercel AI SDK and Gemini Pro model for high-quality audio transcription.
+
+### Components
+
+1. Storage Layer
+   - [X] Define transcription schema
+   - [X] Add storage interfaces
+   - [X] Implement file system storage
+   - [ ] Add caching layer
+   - [ ] Add search capabilities
+
+2. Service Layer
+   - [ ] Implement TranscriptionService
+   - [ ] Add Gemini Pro integration
+   - [ ] Add progress tracking
+   - [ ] Implement error handling
+   - [ ] Add retry mechanism
+
+3. CLI Integration
+   - [X] Design command structure
+   - [ ] Implement transcribe command
+   - [ ] Add progress display
+   - [ ] Add configuration options
+   - [ ] Add search functionality
+
+### Technical Details
+
+#### Storage Schema
+```typescript
+interface TranscriptionSegment {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  confidence: number;
+  speaker?: string;
+}
+
+interface Transcription {
+  id: string;
+  episodeId: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  language: string;
+  model: string;
+  segments: TranscriptionSegment[];
+  metadata: {
+    duration: number;
+    wordCount: number;
+    createdAt: Date;
+    updatedAt: Date;
+    completedAt?: Date;
+    error?: string;
+  };
+  summary?: string;
+  keywords?: string[];
+}
+```
+
+#### CLI Usage
+```bash
+# Basic usage
+podcast-cli transcribe <episodeId>
+
+# With options
+podcast-cli transcribe <episodeId> --language en-US --model gemini-2.5-pro-exp-03-25 --force
+
+# Skip summary/keywords
+podcast-cli transcribe <episodeId> --no-summary --no-keywords
+```
+
+### Validation Criteria
+- [ ] Transcription accuracy meets quality threshold
+- [ ] Performance within acceptable limits
+- [ ] Proper error handling and recovery
+- [ ] Successful integration with player
+- [ ] Efficient storage and retrieval
+- [ ] User-friendly interface
+- [ ] Proper progress tracking
+- [ ] Resource cleanup on failures 

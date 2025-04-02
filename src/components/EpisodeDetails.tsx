@@ -3,6 +3,7 @@ import { Box, Text, useInput, useStdout } from 'ink';
 import type { Episode, EpisodeNote } from '../storage/interfaces.js';
 import type { EpisodeService } from '../services/EpisodeService.js';
 import TurndownService from 'turndown';
+import { ScrollArea } from './ScrollArea.js';
 
 interface EpisodeDetailsProps {
   episode: Episode | undefined;
@@ -117,123 +118,68 @@ export const EpisodeDetails: FC<EpisodeDetailsProps> = ({
 
   if (!episode) {
     return (
-      <Box width="50%" borderStyle="single">
+      <Box 
+        borderStyle="single" 
+        flexGrow={1}
+        height="100%"
+      >
         <Text dimColor>No episode selected</Text>
       </Box>
     );
   }
 
-  // Calculate dimensions
-  const boxWidth = Math.floor(windowWidth * 0.5);
-  const contentWidth = boxWidth - 4; // Account for borders and padding
+  let noteBox =      (<Box>
+  <Text dimColor>No show notes available</Text>
+</Box>)
 
-  // Calculate metadata height dynamically
-  let metadataHeight = 6; // Base height: podcast name, title, publish/duration/id, status icons
-  if (episode.lastListenedAt) {
-    metadataHeight += 1; // Add line for last played date
+  if( isLoadingNotes) {
+    noteBox = (
+      <Box flexGrow={1}>
+        <Text color="yellow">Loading show notes...</Text>
+      </Box>
+    )
+  } else if(episodeNote?.error) {
+    noteBox = (
+      <Box flexGrow={1}>
+        <Text color="red">Error loading show notes: {episodeNote.error}</Text>
+      </Box>
+    )
+  } else if(episodeNote?.description) {
+    noteBox = (
+      <ScrollArea height={windowHeight - 10} isFocused={isFocused}>
+        <Text>{episodeNote.description}</Text>
+      </ScrollArea>
+    )
   }
-  if (episode.progress > 0) {
-    metadataHeight += 1; // Add line for progress
-  }
-  metadataHeight += 2; // Add padding and description header
 
-  // Calculate available height for notes
-  const availableHeight = windowHeight - metadataHeight - 2; // -2 for borders
 
   return (
     <Box 
-      width={boxWidth} 
       borderStyle="single" 
       flexDirection="column"
       borderColor={isFocused ? 'blue' : undefined}
+      flexGrow={1}
+      height="100%"
     >
-      {/* Metadata section */}
-      <Box flexDirection="column" marginBottom={1}>
-        <Box>
+      <Box flexDirection="column" flexGrow={1}>
           <Text bold color="blue">{episode.podcastName}</Text>
-        </Box>
-        <Box>
           <Text bold>{episode.title}</Text>
-        </Box>
-        <Box>
-          <Text>
-            Published: <Text color="yellow">{formatDate(episode.publishDate)}</Text>{'\n'}
-            Duration: <Text color="yellow">{formatDuration(episode.duration)}</Text>{'\n'}
-            ID: <Text color="gray">{episode.id}</Text>
-          </Text>
-        </Box>
-        <Box>
+          <Text>Published: <Text color="yellow">{formatDate(episode.publishDate)}</Text></Text>
+          <Text>Duration: <Text color="yellow">{formatDuration(episode.duration)}</Text></Text>
+          <Text>ID: <Text color="gray">{episode.id}</Text></Text>
           <Text>
             {episode.isStarred ? '★ Starred ' : ''}
             {episode.isListened ? '✓ Listened ' : ''}
             {episode.hasTranscript ? 'T Transcribed ' : ''}
             {episode.isDownloaded ? '📥 Downloaded ' : ''}
           </Text>
-        </Box>
-        {episode.progress > 0 && (
-          <Box>
-            <Text>Progress: <Text color="green">{Math.round(episode.progress * 100)}%</Text></Text>
-          </Box>
-        )}
-        {episode.lastListenedAt && (
-          <Box>
-            <Text>Last played: {formatDate(episode.lastListenedAt)}</Text>
-          </Box>
-        )}
       </Box>
 
-      {/* Show Notes Section */}
+      {noteBox}
+
       <Box flexDirection="column" flexGrow={1}>
-        {isLoadingNotes ? (
-          <Box>
-            <Text color="yellow">Loading show notes...</Text>
-          </Box>
-        ) : episodeNote?.description ? (
-          <Box flexDirection="column">
-            <Text bold>Description:</Text>
-            <Box flexDirection="column" height={availableHeight}>
-              {episodeNote.description
-                .split('\n')
-                .slice(scrollOffset, scrollOffset + availableHeight)
-                .map((line, i) => (
-                  <Box key={i}>
-                    <Text wrap="wrap">{line}</Text>
-                  </Box>
-                ))}
-            </Box>
-            {episodeNote.description.split('\n').length > availableHeight && (
-              <Box>
-                <Text dimColor>
-                  {scrollOffset > 0 ? '↑ ' : ''}
-                  Line {scrollOffset + 1} of {episodeNote.description.split('\n').length}
-                  {scrollOffset < episodeNote.description.split('\n').length - availableHeight ? ' ↓' : ''}
-                </Text>
-              </Box>
-            )}
-          </Box>
-        ) : episodeNote?.error ? (
-          <Box flexDirection="column">
-            <Box>
-              <Text color="red">⚠️ {episodeNote.error}</Text>
-            </Box>
-            <Box marginTop={1}>
-              <Text>Press <Text color="yellow">r</Text> to retry</Text>
-            </Box>
-          </Box>
-        ) : (
-          <Box>
-            <Text dimColor>No show notes available</Text>
-          </Box>
-        )}
+        <Text bold>Description:</Text>
       </Box>
-
-      {/* User Notes Section */}
-      {episode.notes && (
-        <Box flexDirection="column">
-          <Text bold>Notes:</Text>
-          <Text wrap="wrap" color="cyan">{episode.notes}</Text>
-        </Box>
-      )}
     </Box>
-  );
-}; 
+  )
+}

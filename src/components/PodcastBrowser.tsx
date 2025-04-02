@@ -1,12 +1,14 @@
 import React, { FC, useState, useEffect } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Text, useInput, useApp } from 'ink';
 import { Episode } from '../storage/interfaces.js';
 import { SyncProgress } from './SyncProgress.js';
 import { EpisodeService } from '../services/EpisodeService.js';
 import { EpisodeList, FilterMode, SortMode } from './EpisodeList.js';
 import { EpisodeDetails } from './EpisodeDetails.js';
 import { EpisodePlayer } from './EpisodePlayer.js';
+import type { EpisodePlayerHandle } from './EpisodePlayer.js';
 import { HelpOverlay } from './HelpOverlay.js';
+import { Layout } from './Layout.js';
 
 type SyncStage = 'login' | 'fetching' | 'saving' | 'complete' | 'error';
 type ActivePanel = 'list' | 'details' | 'player';
@@ -33,6 +35,16 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
   const [syncProgress, setSyncProgress] = useState({ count: 0, total: 0 });
   const [showHelp, setShowHelp] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>('list');
+  const playerRef = React.useRef<EpisodePlayerHandle>(null);
+  const [playerState, setPlayerState] = useState<{
+    state: 'checking' | 'downloading' | 'ready' | 'playing' | 'paused' | 'error';
+    showTranscript: boolean;
+    transcriptionStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  }>({
+    state: 'checking',
+    showTranscript: false,
+    transcriptionStatus: 'pending'
+  });
   const { exit } = useApp();
 
   // Handle keyboard input for global actions
@@ -68,6 +80,7 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
         setActivePanel('player');
       }
     }
+
   });
 
   const handleSync = async () => {
@@ -82,18 +95,11 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
       setSyncStage('complete');
       setSyncMessage(`Successfully synced ${updatedEpisodes.length} episodes`);
 
-      // Auto-hide sync progress after 3 seconds
-      setTimeout(() => {
-        setIsSyncing(false);
-      }, 3000);
+      setTimeout(() => setIsSyncing(false), 3000);
     } catch (error) {
       setSyncStage('error');
       setSyncMessage(error instanceof Error ? error.message : 'Failed to sync episodes');
-      
-      // Auto-hide sync error after 5 seconds
-      setTimeout(() => {
-        setIsSyncing(false);
-      }, 5000);
+      setTimeout(() => setIsSyncing(false), 5000);
     }
   };
 
@@ -125,7 +131,6 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
   };
 
   const getFilteredAndSortedEpisodes = () => {
-    // Always work with a copy to preserve original order
     let filteredEpisodes = [...episodes];
 
     if (isFiltering) {
@@ -146,7 +151,6 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
         break;
     }
 
-    // Only sort if not in 'listened' mode - preserve original API order for listened
     if (sortMode !== 'listened') {
       switch (sortMode) {
         case 'alpha':
@@ -164,94 +168,149 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
     return filteredEpisodes;
   };
 
+  if (showHelp) {
+    return <HelpOverlay onClose={() => setShowHelp(false)} />;
+  }
+
+  const filteredEpisodes = getFilteredAndSortedEpisodes();
+  const selectedEpisode = filteredEpisodes[selectedIndex];
+
+  const episodeList = (
+    <EpisodeList
+      episodes={episodes}
+      selectedIndex={selectedIndex}
+      onSelectedIndexChange={setSelectedIndex}
+      formatDate={formatDate}
+      isFiltering={isFiltering}
+      nameFilter={nameFilter}
+      onNameFilterChange={setNameFilter}
+      onFilteringChange={setIsFiltering}
+      filterMode={filterMode}
+      onFilterModeChange={setFilterMode}
+      sortMode={sortMode}
+      onSortModeChange={setSortMode}
+      isFocused={activePanel === 'list'}
+    />
+  );
+
+  const episodeDetails = (
+    <EpisodeDetails
+      episode={selectedEpisode}
+      episodeService={episodeService}
+      onEpisodeUpdate={handleEpisodeUpdate}
+      formatDate={formatDate}
+      formatDuration={formatDuration}
+      isFocused={activePanel === 'details'}
+    />
+  );
+
+  const episodePlayer = (
+    <EpisodePlayer
+      ref={playerRef}
+      episode={selectedEpisode}
+      episodeService={episodeService}
+      formatDuration={formatDuration}
+      isFocused={activePanel === 'player'}
+      onStateChange={state => {
+        setPlayerState({
+          state: state.playerState,
+          showTranscript: state.showTranscript,
+          transcriptionStatus: state.transcriptionStatus
+        });
+      }}
+    />
+  );
+
+  // Determine left and right panels based on active panel
+  const { leftPanel, rightPanel } = (() => {
+    switch (activePanel) {
+      case 'list':
+        return {
+          leftPanel: episodeList,
+          rightPanel: episodeDetails
+        };
+      case 'details':
+        return {
+          leftPanel: episodeDetails,
+          rightPanel: episodePlayer
+        };
+      case 'player':
+        return {
+          leftPanel: episodeDetails,
+          rightPanel: episodePlayer
+        };
+      default:
+        return {
+          leftPanel: episodeList,
+          rightPanel: episodeDetails
+        };
+    }
+  })();
+
   return (
-    <Box flexDirection="column" height={process.stdout.rows}>
-      {/* Header - Single line */}
-      <Box height={1} flexShrink={0}>
-        <Text>
-          {isFiltering ? (
-            <Text>Search: {nameFilter}</Text>
-          ) : (
-            <Text>
-              Filter: <Text color="green">{filterMode.toUpperCase()}</Text> | 
-              Sort: <Text color="yellow">{sortMode.toUpperCase()}</Text> |
-              Panel: <Text color="blue">{activePanel.toUpperCase()}</Text>
-            </Text>
-          )}
-        </Text>
-      </Box>
-
-      {/* Help Overlay */}
-      {showHelp && (
-        <HelpOverlay onClose={() => setShowHelp(false)} />
-      )}
-
-      {/* Sync Progress */}
-      {isSyncing && (
-        <Box height={1} flexShrink={0}>
-          <SyncProgress 
-            stage={syncStage} 
-            message={syncMessage} 
-            count={syncProgress.count}
-            total={syncProgress.total}
-          />
-        </Box>
-      )}
-
-      {/* Main Content Area */}
-      <Box flexGrow={1} flexDirection="row">
-        {/* Left Panel */}
-        <Box width="50%" flexShrink={0}>
-          <EpisodeList
-            episodes={episodes}
-            selectedIndex={selectedIndex}
-            onSelectedIndexChange={setSelectedIndex}
-            formatDate={formatDate}
-            isFiltering={isFiltering}
-            nameFilter={nameFilter}
-            onNameFilterChange={setNameFilter}
-            onFilteringChange={setIsFiltering}
-            filterMode={filterMode}
-            onFilterModeChange={setFilterMode}
-            sortMode={sortMode}
-            onSortModeChange={setSortMode}
-            isFocused={activePanel === 'list'}
-          />
-        </Box>
-
-        {/* Right Panel */}
-        <Box width="50%" flexShrink={0}>
-          {activePanel === 'player' ? (
-            <EpisodePlayer
-              episode={getFilteredAndSortedEpisodes()[selectedIndex]}
-              episodeService={episodeService}
-              formatDuration={formatDuration}
-              isFocused={true}
-            />
-          ) : (
-            <EpisodeDetails
-              episode={getFilteredAndSortedEpisodes()[selectedIndex]}
-              episodeService={episodeService}
-              onEpisodeUpdate={handleEpisodeUpdate}
-              formatDate={formatDate}
-              formatDuration={formatDuration}
-              isFocused={activePanel === 'details'}
+    <Layout
+      header={
+        <>
+          <Text>
+            {isFiltering ? (
+              <Text>Search: {nameFilter}</Text>
+            ) : (
+              <Text>
+                Filter: <Text color="green">{filterMode.toUpperCase()}</Text> | 
+                Sort: <Text color="yellow">{sortMode.toUpperCase()}</Text> |
+                Panel: <Text color="blue">{activePanel.toUpperCase()}</Text>
+              </Text>
+            )}
+          </Text>
+          {isSyncing && (
+            <SyncProgress 
+              stage={syncStage} 
+              message={syncMessage} 
+              count={syncProgress.count}
+              total={syncProgress.total}
             />
           )}
-        </Box>
-      </Box>
-
-      {/* Footer - Single line */}
-      <Box height={1} flexShrink={0}>
+        </>
+      }
+      leftPanel={leftPanel}
+      rightPanel={rightPanel}
+      footer={
         <Text dimColor>
           Press <Text color="yellow">?</Text> for help | 
           <Text color="yellow">←/→</Text> switch panels |
-          <Text color="yellow">↑/↓</Text> navigate | 
-          <Text color="yellow">enter</Text> play |
-          <Text color="yellow">s</Text> sync | 
+          {activePanel === 'list' && (
+            <>
+              <Text color="yellow">↑/↓</Text> navigate | 
+              <Text color="yellow">enter</Text> play |
+              <Text color="yellow">s</Text> sync
+            </>
+          )}
+          {activePanel === 'details' && (
+            <>
+              <Text color="yellow">↑/↓</Text> scroll | 
+              <Text color="yellow">enter</Text> play
+            </>
+          )}
+          {activePanel === 'player' && (
+            <>
+              <Text color="yellow">space</Text> play/pause | 
+              <Text color="yellow">←/→</Text> seek |
+              {playerState.transcriptionStatus === 'completed' ? (
+                <>
+                  <Text color="yellow">t</Text> {playerState.showTranscript ? 'hide' : 'show'} transcript
+                  {playerState.showTranscript && ' | ↑/↓ navigate segments'}
+                </>
+              ) : playerState.transcriptionStatus === 'pending' && (
+                <>
+                  <Text color="yellow">t</Text> start transcription
+                </>
+              )}
+            </>
+          )} |
           <Text color="yellow">q</Text> quit
         </Text>
-      </Box>
-    </Box>
+      }
+      activePanel={activePanel === 'list' ? 'left' : 'right'}
+    />
   );
 }; 

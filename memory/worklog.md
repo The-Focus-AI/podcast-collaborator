@@ -1,5 +1,27 @@
 # Work Log
 
+## 2025-04-02 08:12 EDT - Transcription Service Integration
+
+### Summary
+Fixed the transcription service integration by properly passing the OnePasswordService to the transcribe command.
+
+### Accomplishments
+- [X] Fixed OnePasswordService injection in transcribe command
+- [X] Updated command creation in index.ts to include OnePasswordService
+- [X] Verified proper API key retrieval from 1Password
+- [X] Ensured proper service initialization
+
+### Technical Details
+- Updated `createTranscribeCommand` call to include OnePasswordService
+- Maintained proper dependency injection pattern
+- Ensured proper error handling for API key retrieval
+
+### Next Steps
+1. Test transcription with real audio files
+2. Implement progress tracking
+3. Add error recovery for failed transcriptions
+4. Add transcription caching
+
 ## 2025-03-30 15:00:00
 
 ### Version Command Implementation
@@ -813,3 +835,29 @@ Working on simplifying the service architecture for note loading by consolidatin
 2. Add transcription service integration
 3. Add keyboard shortcuts for seeking
 4. Add volume control
+
+## 2025-04-02 10:49 EDT - Improved Transcript Scrolling
+
+## Summary
+Improved the transcript display in the player by implementing a specialized scroll area component that better handles transcript navigation and display.
+
+## Accomplishments
+- Created new `TranscriptScrollArea` component for better scroll management
+- Removed direct keyboard handling from scroll area to prevent input conflicts
+- Implemented auto-scrolling to keep current segment visible
+- Improved text wrapping and layout for transcript segments
+- Removed unnecessary borders for cleaner UI
+- Fixed progress bar width calculations
+
+## Technical Details
+- Created `TranscriptScrollArea.tsx` with specialized scroll logic
+- Uses reducer pattern for scroll state management
+- Handles auto-scrolling based on current segment index
+- Maintains proper scroll boundaries and item visibility
+- Improved text layout with proper spacing for timestamps and metadata
+
+## Next Steps
+1. Test scrolling behavior with longer transcripts
+2. Add smooth scrolling animation
+3. Consider adding scroll position indicators
+4. Optimize re-renders during scrolling

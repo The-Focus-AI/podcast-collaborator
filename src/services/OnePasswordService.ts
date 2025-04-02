@@ -11,4 +11,9 @@ export class OnePasswordService {
       password: data['fields'].find((f: any) => f['label'] === 'password')['value']
     };
   }
+
+  async getGoogleApiKey(): Promise<string> {
+    const output = execSync('op read "op://Development/Google AI Studio Key/notesPlain"');
+    return output.toString().trim();
+  }
 } 

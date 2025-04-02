@@ -12,6 +12,7 @@ import { createVersionCommand } from './cli/commands/version.js';
 import { createBrowseCommand } from './cli/commands/browse.js';
 import { createListCommand } from './cli/commands/list.js';
 import { createNotesCommand } from './cli/commands/notes.js';
+import { createTranscribeCommand } from './cli/commands/transcribe.js';
 
 async function getPackageVersion(): Promise<string> {
   const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -38,17 +39,16 @@ async function main() {
     program.addCommand(createVersionCommand());
     program.addCommand(createListCommand(storageProvider));
     program.addCommand(createNotesCommand(storageProvider, pocketCastsService));
+    program.addCommand(createTranscribeCommand(storageProvider, pocketCastsService, onePasswordService));
     
     // Add browse command and set it as default
     const browseCommand = createBrowseCommand(storageProvider, pocketCastsService);
     program.addCommand(browseCommand);
-    
-    // Make browse the default command
-    program.addHelpCommand(false); // Disable the default help command
-    program.action(async () => {
-      // If no command is specified, run the browse command
-      await browseCommand.parseAsync(process.argv);
-    });
+
+    // If no arguments, run browse command
+    if (process.argv.length === 2) {
+      process.argv.push('browse');
+    }
 
     await program.parseAsync(process.argv);
   } catch (error) {
