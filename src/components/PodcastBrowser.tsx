@@ -125,7 +125,8 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
   };
 
   const getFilteredAndSortedEpisodes = () => {
-    let filteredEpisodes = episodes;
+    // Always work with a copy to preserve original order
+    let filteredEpisodes = [...episodes];
 
     if (isFiltering) {
       filteredEpisodes = filteredEpisodes.filter(ep => 
@@ -145,19 +146,19 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
         break;
     }
 
-    switch (sortMode) {
-      case 'listened':
-        filteredEpisodes = filteredEpisodes.sort((a, b) => b.isListened ? -1 : 1);
-        break;
-      case 'alpha':
-        filteredEpisodes = filteredEpisodes.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      case 'shortest':
-        filteredEpisodes = filteredEpisodes.sort((a, b) => a.duration - b.duration);
-        break;
-      case 'longest':
-        filteredEpisodes = filteredEpisodes.sort((a, b) => b.duration - a.duration);
-        break;
+    // Only sort if not in 'listened' mode - preserve original API order for listened
+    if (sortMode !== 'listened') {
+      switch (sortMode) {
+        case 'alpha':
+          filteredEpisodes.sort((a, b) => a.title.localeCompare(b.title));
+          break;
+        case 'shortest':
+          filteredEpisodes.sort((a, b) => a.duration - b.duration);
+          break;
+        case 'longest':
+          filteredEpisodes.sort((a, b) => b.duration - a.duration);
+          break;
+      }
     }
 
     return filteredEpisodes;

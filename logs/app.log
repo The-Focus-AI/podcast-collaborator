@@ -231,3 +231,17 @@
 2025-04-02T01:18:34.471Z API [request=6b621efe-8b44-4471-828b-8639dc150eff episode=d3349df8-c8ae-4e0c-9f86-7c9e92794c64 source=pocketcasts-cache]GET /episode/show_notes/d3349df8-c8ae-4e0c-9f86-7c9e92794c64 200 136ms
 2025-04-02T01:18:36.309Z API [request=0c418488-fb33-4364-be1b-894f5872cadd episode=99cce366-6a07-4d3c-8c0b-35a4bc7de345 source=pocketcasts-cache]GET /episode/show_notes/99cce366-6a07-4d3c-8c0b-35a4bc7de345 200 72ms
 2025-04-02T01:18:36.671Z API [request=3d5e66a5-2b89-4e66-b705-7a6a5f91877d episode=61f85427-51c6-4a2f-a23a-58a09cb7ce3e source=pocketcasts-cache]GET /episode/show_notes/61f85427-51c6-4a2f-a23a-58a09cb7ce3e 200 144ms
+2025-04-02T09:01:20.111Z CMD Storage initialized
+2025-04-02T09:03:54.888Z CMD Storage initialized
+2025-04-02T09:04:24.389Z CMD Storage initialized
+2025-04-02T09:04:27.734Z CMD Storage initialized
+2025-04-02T09:07:07.813Z CMD Storage initialized
+2025-04-02T09:07:14.621Z API [request=4992be63-8c9d-4ca0-b143-a125cd8bcfd0 episode=68d82960-30c1-4707-bc26-b02e32ef62a3 source=pocketcasts-cache]GET /episode/show_notes/68d82960-30c1-4707-bc26-b02e32ef62a3 200 197ms
+2025-04-02T09:07:20.531Z ERROR [request=8582707e-1fcd-4229-941a-225d42608097]Error syncing episodes: Not logged in
+2025-04-02T09:07:37.316Z API [request=60e8f75b-c08b-45b8-add7-7e1500f29686 episode=c1cbb990-b205-0134-106e-25324e2a541d source=pocketcasts-cache]GET /episode/show_notes/c1cbb990-b205-0134-106e-25324e2a541d 200 270ms
+2025-04-02T09:07:39.055Z API [request=c584b862-9a77-412a-a193-f04398476790 episode=b80691f5-6564-4478-8345-8ebd7acecf5c source=pocketcasts-cache]GET /episode/show_notes/b80691f5-6564-4478-8345-8ebd7acecf5c 200 165ms
+2025-04-02T09:30:34.839Z CMD Storage initialized
+2025-04-02T09:33:15.709Z CMD Storage initialized
+2025-04-02T09:38:28.330Z CMD Storage initialized
+2025-04-02T09:38:28.658Z API [request=1289c128-ba0c-4226-9168-95f0dcc62d95 episode=e3fb6d3a-118f-474f-aca1-b64fbe9b21d6 source=pocketcasts-cache]GET /episode/show_notes/e3fb6d3a-118f-474f-aca1-b64fbe9b21d6 200 291ms
+2025-04-02T09:38:31.477Z API [request=d47bfac8-838a-4eb2-bb3b-2806a8bd196b episode=b516b932-634e-426b-aad2-7cf0fefeed9a source=pocketcasts-cache]GET /episode/show_notes/b516b932-634e-426b-aad2-7cf0fefeed9a 200 108ms

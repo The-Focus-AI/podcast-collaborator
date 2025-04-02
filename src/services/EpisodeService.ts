@@ -26,7 +26,12 @@ export class EpisodeServiceImpl implements EpisodeService {
 
   async listEpisodes(): Promise<Episode[]> {
     const storage = this.storageProvider.getStorage();
-    return storage.listEpisodes();
+    const episodes = await storage.listEpisodes();
+
+    // Sort episodes by publish date, newest first (consistent with 'list' command)
+    episodes.sort((a, b) => b.publishDate.getTime() - a.publishDate.getTime());
+
+    return episodes;
   }
 
   async syncEpisodes(): Promise<Episode[]> {

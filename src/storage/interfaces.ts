@@ -154,7 +154,7 @@ export const RawPocketCastsDataSchema = z.object({
 // Raw data storage interface
 export interface RawDataStorage {
   saveRawData(type: 'starred' | 'listened', data: RawPocketCastsEpisode[]): Promise<void>
-  getRawData(type: 'starred' | 'listened'): Promise<unknown[]>
+  getRawData(type: 'starred' | 'listened'): Promise<RawPocketCastsEpisode[]>
 }
 
 // Raw storage interface
@@ -179,7 +179,7 @@ export interface EpisodeStorage {
   listEpisodes(): Promise<Episode[]>
   updateEpisode(id: string, episode: Partial<Episode>): Promise<void>
   deleteEpisode(id: string): Promise<void>
-  getRawData(type: 'starred' | 'listened'): Promise<unknown[]>
+  getRawData(type: 'starred' | 'listened'): Promise<RawPocketCastsEpisode[]>
 }
 
 // Asset interface for downloaded files

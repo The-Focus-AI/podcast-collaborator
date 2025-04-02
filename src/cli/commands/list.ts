@@ -1,7 +1,15 @@
 import { Command } from 'commander'
 import { StorageProvider } from '@/storage/StorageProvider.js'
 import chalk from 'chalk'
-import type { RawPocketCastsEpisode } from '@/storage/interfaces.js'
+import type { RawPocketCastsEpisode } from '@/storage/interfaces.js';
+import {
+  formatDuration,
+  formatDate,
+  getStatusSymbols,
+  getProgress,
+  truncate,
+  isEpisodeListened
+} from '../utils/formatters.js';
 
 interface ListOptions {
   starred?: boolean
@@ -11,48 +19,7 @@ interface ListOptions {
   json?: boolean
 }
 
-function formatDuration(duration: number): string {
-  const hours = Math.floor(duration / 3600)
-  const minutes = Math.floor((duration % 3600) / 60)
-  
-  if (hours > 0) {
-    return `${hours}h${minutes}m`.padStart(6)
-  }
-  return `${minutes}m`.padStart(6)
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  const month = date.toLocaleDateString('en-US', { month: 'short' })
-  const day = date.getDate().toString().padStart(2, '0')
-  const year = date.getFullYear()
-  return `${month} ${day}, ${year}`
-}
-
-function getStatusSymbols(episode: RawPocketCastsEpisode): string {
-  const starred = episode.starred ? chalk.yellow('★') : ' '
-  const listened = episode.playingStatus === 3 ? chalk.green('✓') : ' '
-  const transcribed = false ? chalk.blue('T') : ' ' // TODO: Add actual transcription check
-  return `${starred}${listened}${transcribed} `
-}
-
-function getProgress(episode: RawPocketCastsEpisode): string {
-  if (episode.playingStatus === 3) return '100%';
-  if (episode.playedUpTo > 0) {
-    const progress = Math.min(100, Math.round((episode.playedUpTo / episode.duration) * 100));
-    return `${progress}%`;
-  }
-  return '0%';
-}
-
-function truncate(str: string, maxLength: number): string {
-  if (str.length <= maxLength) return str.padEnd(maxLength);
-  return str.slice(0, maxLength - 1) + '…';
-}
-
-function isEpisodeListened(episode: RawPocketCastsEpisode): boolean {
-  return episode.playingStatus === 3 || episode.playedUpTo >= episode.duration
-}
+// Utility functions moved to src/cli/utils/formatters.ts
 
 function formatEpisode(episode: RawPocketCastsEpisode): string {
   const date = chalk.blue(formatDate(episode.published).padEnd(12));  // 12 chars
