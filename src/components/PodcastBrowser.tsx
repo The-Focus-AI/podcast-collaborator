@@ -29,10 +29,11 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
   const [syncMessage, setSyncMessage] = useState('');
   const [syncProgress, setSyncProgress] = useState({ count: 0, total: 0 });
   const [showHelp, setShowHelp] = useState(false);
+  const [focusedPanel, setFocusedPanel] = useState<'list' | 'details'>('list');
   const { exit } = useApp();
 
   // Handle keyboard input for global actions
-  useInput((input) => {
+  useInput((input, key) => {
     if (showHelp) {
       setShowHelp(false);
       return;
@@ -44,6 +45,10 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
       setShowHelp(true);
     } else if (input === 's' && !isSyncing) {
       handleSync();
+    } else if (key.leftArrow && focusedPanel === 'details') {
+      setFocusedPanel('list');
+    } else if (key.rightArrow && focusedPanel === 'list') {
+      setFocusedPanel('details');
     }
   });
 
@@ -110,7 +115,8 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
           ) : (
             <Text>
               Filter: <Text color="green">{filterMode.toUpperCase()}</Text> | 
-              Sort: <Text color="yellow">{sortMode.toUpperCase()}</Text>
+              Sort: <Text color="yellow">{sortMode.toUpperCase()}</Text> |
+              Panel: <Text color="blue">{focusedPanel.toUpperCase()}</Text>
             </Text>
           )}
         </Text>
@@ -141,6 +147,7 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
           onFilterModeChange={setFilterMode}
           sortMode={sortMode}
           onSortModeChange={setSortMode}
+          isFocused={focusedPanel === 'list'}
         />
         <EpisodeDetails
           episode={episodes[selectedIndex]}
@@ -148,20 +155,18 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
           onEpisodeUpdate={handleEpisodeUpdate}
           formatDate={formatDate}
           formatDuration={formatDuration}
+          isFocused={focusedPanel === 'details'}
         />
       </Box>
 
       {/* Footer - Single line */}
       <Box height={1}>
-        <Text>
-          <Text color="green">q</Text>:quit |
-          <Text color="green">f</Text>:filter |
-          <Text color="green">o</Text>:sort |
-          <Text color="green">/</Text>:search |
-          <Text color="green">s</Text>:sync |
-          <Text color="green">r</Text>:retry |
-          <Text color="green">↑↓</Text>:navigate |
-          <Text color="green">?</Text>:help
+        <Text dimColor>
+          Press <Text color="yellow">?</Text> for help | 
+          <Text color="yellow">←/→</Text> switch panels |
+          <Text color="yellow">↑/↓</Text> navigate | 
+          <Text color="yellow">s</Text> sync | 
+          <Text color="yellow">q</Text> quit
         </Text>
       </Box>
     </Box>

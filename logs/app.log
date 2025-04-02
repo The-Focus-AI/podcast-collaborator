@@ -169,3 +169,16 @@
 2025-04-02T00:03:14.267Z API [request=ee6f043f-f370-4545-9426-7ea39444b278 episode=08e522b9-4847-42e7-a2d5-478b388169b3 source=pocketcasts-cache]GET /episode/show_notes/08e522b9-4847-42e7-a2d5-478b388169b3 200 139ms
 2025-04-02T00:03:15.085Z API [request=1268eab1-e74b-4218-a254-2e1440de98d2 episode=1106fc98-4e74-49d0-8749-18cf3468b7f6 source=pocketcasts-cache]GET /episode/show_notes/1106fc98-4e74-49d0-8749-18cf3468b7f6 200 138ms
 2025-04-02T00:03:15.685Z API [request=11eafc84-26d2-4602-8969-a79ac7dd8ffd episode=114ab004-af89-44f5-b015-adda2bc615f4 source=pocketcasts-cache]GET /episode/show_notes/114ab004-af89-44f5-b015-adda2bc615f4 200 61ms
+2025-04-02T00:08:48.130Z CMD Storage initialized
+2025-04-02T00:09:23.254Z API [request=62e337ab-a338-4514-8fad-8fd859f845fa episode=116c929f-077f-4931-b973-3f5c61c9322d source=pocketcasts-cache]GET /episode/show_notes/116c929f-077f-4931-b973-3f5c61c9322d 200 251ms
+2025-04-02T00:09:24.206Z API [request=a0c373dc-73f6-4a33-800c-39b2bc43ef4b episode=123d78f0-aba5-4866-8af7-53623c1f3922 source=pocketcasts-cache]GET /episode/show_notes/123d78f0-aba5-4866-8af7-53623c1f3922 200 172ms
+2025-04-02T00:09:24.371Z API [request=22ad12ef-3f76-4376-87db-c0714cf0bb63 episode=137e31a7-edd6-44d2-9fbf-efd631140a3d source=pocketcasts-cache]GET /episode/show_notes/137e31a7-edd6-44d2-9fbf-efd631140a3d 200 143ms
+2025-04-02T00:09:24.569Z API [request=b70935bf-6c00-4516-a374-558ff4747b7e episode=1702d51a-3f09-4dde-87f5-0b6ccc21ecf7 source=pocketcasts-cache]GET /episode/show_notes/1702d51a-3f09-4dde-87f5-0b6ccc21ecf7 200 181ms
+2025-04-02T00:09:24.637Z API [request=4cf52ce0-69bc-40dc-bf23-a2a7b2ebe619 episode=19eba42e-380f-45e7-928c-e95f13ccbbc6 source=pocketcasts-cache]GET /episode/show_notes/19eba42e-380f-45e7-928c-e95f13ccbbc6 200 57ms
+2025-04-02T00:09:34.340Z API [request=05c3fdae-ea09-4199-bcbf-35f620aed8b3 episode=1af0d0da-47d8-41aa-b4c3-be1b0c39e573 source=pocketcasts-cache]GET /episode/show_notes/1af0d0da-47d8-41aa-b4c3-be1b0c39e573 200 165ms
+2025-04-02T00:09:34.558Z API [request=ad646e0f-c16e-4c91-8fef-1e54977a97ad episode=1c44c9f3-b798-4159-83e7-f1f801b42aea source=pocketcasts-cache]GET /episode/show_notes/1c44c9f3-b798-4159-83e7-f1f801b42aea 200 54ms
+2025-04-02T00:09:36.132Z API [request=2a731544-713d-4e0a-834e-8c36098e3e85 episode=1f7de252-1c3f-4621-a5dd-9fedefeafd5c source=pocketcasts-cache]GET /episode/show_notes/1f7de252-1c3f-4621-a5dd-9fedefeafd5c 200 216ms
+2025-04-02T00:11:29.127Z CMD Storage initialized
+2025-04-02T00:12:21.357Z CMD Storage initialized
+2025-04-02T00:14:22.961Z CMD Storage initialized
+2025-04-02T00:16:14.012Z CMD Storage initialized

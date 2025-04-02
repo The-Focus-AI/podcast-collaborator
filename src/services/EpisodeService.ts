@@ -9,6 +9,7 @@ export interface EpisodeService {
   loadShowNotes(episodeId: string): Promise<EpisodeNote>;
   updateEpisode(episodeId: string, update: Partial<Episode>): Promise<Episode>;
   getStorage(): PodcastStorage;
+  syncEpisodes(): Promise<Episode[]>;
 }
 
 export class EpisodeServiceImpl implements EpisodeService {
@@ -24,6 +25,29 @@ export class EpisodeServiceImpl implements EpisodeService {
   async listEpisodes(): Promise<Episode[]> {
     const storage = this.storageProvider.getStorage();
     return storage.listEpisodes();
+  }
+
+  async syncEpisodes(): Promise<Episode[]> {
+    const storage = this.storageProvider.getStorage();
+    
+    // Get episodes from PocketCasts
+    await this.pocketCastsService.login();
+    const [listenedEpisodes, starredEpisodes] = await Promise.all([
+      this.pocketCastsService.getListenedEpisodes(),
+      this.pocketCastsService.getStarredEpisodes()
+    ]);
+
+    // Convert to our Episode format
+    const episodes = [...listenedEpisodes, ...starredEpisodes].map(
+      ep => this.pocketCastsService.convertToEpisode(ep)
+    );
+
+    // Save all episodes
+    await Promise.all(
+      episodes.map(episode => storage.saveEpisode(episode))
+    );
+
+    return episodes;
   }
 
   async loadShowNotes(episodeId: string): Promise<EpisodeNote> {

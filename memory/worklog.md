@@ -688,3 +688,95 @@ Working on simplifying the service architecture for note loading by consolidatin
 1. Update PocketCastsService to handle note management
 2. Simplify EpisodeDetails component
 3. Clean up unused code and interfaces 
+
+## 2024-04-01 19:45 EDT
+
+### UI Improvements for Episode Details
+- Added HTML to Markdown conversion for show notes
+- Implemented responsive window resizing
+- Added keyboard navigation:
+  - Arrow keys for scrolling notes
+  - Right arrow to focus details panel
+  - Proper focus indication with blue border
+- Improved note display:
+  - Proper line wrapping
+  - Scroll position indicator
+  - Dynamic height adjustment
+  - Truncation for long lines
+
+### Technical Details
+- Switched to Turndown for HTML to Markdown conversion
+- Added window resize event handling
+- Implemented scroll state management
+- Added focus management between panels
+- Fixed text wrapping and truncation
+
+### Next Steps
+1. Add keyboard shortcuts help overlay
+2. Consider adding search within notes
+3. Implement note export functionality
+4. Add customizable color themes
+
+## 2024-04-01 20:14 EDT
+
+### UI Fixes and Improvements
+- Fixed note scrolling in EpisodeDetails
+  - Proper word wrapping for long lines
+  - Dynamic metadata height calculation
+  - Fixed content overlap issues
+  - Better scroll position indicators
+- Improved keyboard navigation
+  - Left/right arrows to switch panels
+  - Up/down arrows for scrolling in focused panel
+  - Visual focus indicators with blue borders
+- Enhanced layout
+  - Separated metadata, show notes, and user notes sections
+  - Added proper spacing and margins
+  - Better progress display formatting
+  - Dynamic height adjustments based on content
+
+### Technical Details
+- Added dynamic metadata height calculation
+- Improved scroll offset handling
+- Fixed content width calculations
+- Added flexbox layout improvements
+- Better window resize handling
+- Added focus state management between panels
+
+### Next Steps
+1. Add search within show notes
+2. Consider adding note export functionality
+3. Add keyboard shortcuts help overlay
+4. Add customizable color themes
+
+## 2025-04-01 20:16 EDT
+
+### UI Polish and Refinements
+- Fixed metadata spacing and layout:
+  - Dynamic height calculation for metadata section
+  - Proper spacing between sections
+  - Dedicated line for progress display
+  - Better visual organization
+- Improved scroll behavior:
+  - Fixed content overlap issues
+  - Better scroll position calculation
+  - Proper line counting for navigation
+  - Cleaner scroll indicators
+- Enhanced visual feedback:
+  - Clear section separation
+  - Better progress formatting
+  - Consistent spacing throughout
+  - Improved readability
+
+### Technical Details
+- Implemented dynamic metadata height calculation based on content
+- Added proper margin between sections
+- Fixed scroll offset calculations
+- Improved layout structure with flexbox
+- Better handling of progress display
+
+### Next Steps
+1. Add search within show notes
+2. Implement note export functionality
+3. Add keyboard shortcuts help overlay
+4. Add customizable color themes

@@ -19,6 +19,7 @@ interface EpisodeListProps {
   onFilterModeChange: (mode: FilterMode) => void;
   sortMode: SortMode;
   onSortModeChange: (mode: SortMode) => void;
+  isFocused?: boolean;
 }
 
 export const EpisodeList: FC<EpisodeListProps> = ({
@@ -34,6 +35,7 @@ export const EpisodeList: FC<EpisodeListProps> = ({
   onFilterModeChange,
   sortMode,
   onSortModeChange,
+  isFocused = false,
 }) => {
   // Filter episodes based on current mode and name filter
   const filteredEpisodes = episodes.filter(episode => {
@@ -84,6 +86,8 @@ export const EpisodeList: FC<EpisodeListProps> = ({
 
   // Handle keyboard input for filtering and navigation
   useInput((input, key) => {
+    if (!isFocused) return;
+
     if (isFiltering) {
       if (key.escape) {
         onFilteringChange(false);
@@ -135,7 +139,7 @@ export const EpisodeList: FC<EpisodeListProps> = ({
   }
 
   return (
-    <Box width="50%" borderStyle="single">
+    <Box width="50%" borderStyle="single" borderColor={isFocused ? 'blue' : undefined}>
       {episodes.length === 0 ? (
         <Box>
           <Text dimColor>No episodes found. Press 's' to sync with PocketCasts.</Text>
