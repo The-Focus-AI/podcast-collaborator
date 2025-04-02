@@ -3,9 +3,7 @@ import { Episode } from '@/storage/interfaces.js'
 import { OnePasswordService } from './OnePasswordService.js'
 import { logger } from '../utils/logger.js'
 import { v4 as uuidv4 } from 'uuid'
-import { promisify } from 'util'
-import { exec } from 'child_process'
-import { readFile, access } from 'fs/promises'
+import { access } from 'fs/promises'
 import { constants } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
@@ -63,7 +61,7 @@ export interface PocketCastsService {
   getStarredEpisodes(): Promise<PocketCastsEpisode[]>
   convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Promise<Episode>
   getEpisodeNotes(episodeId: string): Promise<string>
-  downloadEpisode(episode: Episode, onProgress: (progress: number) => void): Promise<Buffer>
+  downloadEpisode(episode: Episode): Promise<Response> // Removed onProgress, returns raw Response
 }
 
 export class PocketCastsServiceImpl implements PocketCastsService {
@@ -288,24 +286,32 @@ export class PocketCastsServiceImpl implements PocketCastsService {
     }
   }
 
-  async downloadEpisode(episode: Episode, onProgress: (progress: number) => void): Promise<Buffer> {
+  async downloadEpisode(episode: Episode): Promise<Response> {
     const requestId = uuidv4();
-    const assetPath = join(homedir(), '.podcast-cli', 'assets', 'episodes', episode.id, 'audio.mp3');
-    
-    logger.debug(`Starting download for episode ${episode.id}`, { requestId, episodeId: episode.id });
+    const startTime = Date.now();
+    logger.debug(`Requesting download stream for episode ${episode.id} from ${episode.url}`, { requestId, episodeId: episode.id });
 
-    // Use curl to download directly to assets folder
-    const escapedUrl = episode.url.replace(/'/g, "'\\''");
-    const curlCmd = `mkdir -p "${join(homedir(), '.podcast-cli', 'assets', 'episodes', episode.id)}" && curl -s -L -o '${assetPath}' '${escapedUrl}' &`;
-    
     try {
-      await promisify(exec)(curlCmd);
-      logger.debug(`Download started in background for episode ${episode.id}`, { requestId, episodeId: episode.id });
-      return Buffer.from([]);  // Return empty buffer since we don't need it
+      const response = await fetch(episode.url, {
+        method: 'GET',
+        // No specific headers needed for direct audio download usually
+      });
+
+      const duration = Date.now() - startTime;
+      // Log only basic info here, detailed logging/error handling happens in EpisodeService
+      logger.api('GET', episode.url, response.status, duration, { requestId, episodeId: episode.id, source: 'podcast-audio-stream' });
+
+      if (!response.ok) {
+        // Throw error to be caught by EpisodeService
+        throw new Error(`Failed to initiate download for episode ${episode.id}: ${response.status} ${response.statusText}`);
+      }
+
+      // Return the raw response object for streaming
+      return response;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`Download failed for episode ${episode.id}: ${errorMessage}`, { requestId, episodeId: episode.id });
-      throw error;
+      logger.error(`Download request failed for episode ${episode.id}: ${errorMessage}`, { requestId, episodeId: episode.id });
+      throw error; // Re-throw for EpisodeService to handle
     }
   }
 }

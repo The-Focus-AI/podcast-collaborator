@@ -3,6 +3,9 @@ import type { StorageProvider } from '../storage/StorageProvider.js';
 import type { PocketCastsService } from './PocketCastsService.js';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
+import { createWriteStream } from 'fs';
+import { mkdir } from 'fs/promises'; // Added mkdir import
+import { pipeline } from 'stream/promises';
 
 export interface EpisodeService {
   listEpisodes(): Promise<Episode[]>;
@@ -10,7 +13,7 @@ export interface EpisodeService {
   updateEpisode(episodeId: string, update: Partial<Episode>): Promise<Episode>;
   getStorage(): PodcastStorage;
   syncEpisodes(): Promise<Episode[]>;
-  downloadEpisode(episodeId: string, onProgress: (progress: number) => void): Promise<Asset>;
+  downloadEpisode(episodeId: string, onProgress: (progress: number) => void): Promise<void>; // Updated return type
   transcribeEpisode(episodeId: string): Promise<void>;
 }
 
@@ -124,36 +127,83 @@ export class EpisodeServiceImpl implements EpisodeService {
     return updatedEpisode;
   }
 
-  async downloadEpisode(episodeId: string, onProgress: (progress: number) => void): Promise<Asset> {
+  async downloadEpisode(episodeId: string, onProgress: (progress: number) => void): Promise<void> { // Return void, asset is saved directly
     const requestId = uuidv4();
-    logger.debug(`Starting download for episode ${episodeId}`, { requestId, episodeId });
+    const storage = this.storageProvider.getStorage();
+    logger.debug(`Processing download request for episode ${episodeId}`, { requestId, episodeId });
 
     // Get the episode from storage
-    const episode = await this.storageProvider.getStorage().getEpisode(episodeId);
+    const episode = await storage.getEpisode(episodeId);
     if (!episode) {
-      throw new Error('Episode not found');
+      throw new Error(`Episode ${episodeId} not found`);
     }
 
     if (!episode.url) {
-      throw new Error('No download URL available');
+      throw new Error(`No download URL available for episode ${episodeId}`);
     }
 
-    // Download the file
-    await this.pocketCastsService.downloadEpisode(episode, onProgress);
+    let response: Response | null = null;
+    try {
+      // Get the download response stream
+      response = await this.pocketCastsService.downloadEpisode(episode);
 
-    // Update episode status
-    await this.updateEpisode(episodeId, { isDownloaded: true });
+      if (!response.body) {
+        throw new Error('Response body is null, cannot download.');
+      }
 
-    // Return empty asset since we don't need it
-    return {
-      id: episodeId,
-      episodeId,
-      type: 'audio',
-      name: 'audio',
-      data: Buffer.from([]),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+      // Determine asset path and ensure directory exists
+      const assetName = 'audio.mp3'; // Or derive from URL/headers if possible
+      const assetPath = storage.getAssetPath(episode.id, assetName);
+      const assetDir = assetPath.substring(0, assetPath.lastIndexOf('/'));
+      await mkdir(assetDir, { recursive: true }); // Ensure directory exists
+
+      // Get total size for progress calculation
+      const totalSize = Number(response.headers.get('Content-Length') || '0');
+      let downloadedSize = 0;
+      onProgress(0); // Initial progress
+
+      // Create a write stream to the target file
+      const fileStream = createWriteStream(assetPath);
+
+      // Use pipeline to handle stream piping and error handling
+      // Also, manually track progress
+      const progressTrackingStream = new TransformStream({
+        transform(chunk, controller) {
+          downloadedSize += chunk.length;
+          if (totalSize > 0) {
+            const progress = Math.min(100, Math.round((downloadedSize / totalSize) * 100));
+            onProgress(progress);
+          }
+          controller.enqueue(chunk);
+        },
+      });
+
+      // Node.js ReadableStream from Fetch Response body
+      const nodeReadableStream = response.body as unknown as NodeJS.ReadableStream;
+
+      // Pipe response body -> progress tracker -> file stream
+      await pipeline(
+        nodeReadableStream,
+        progressTrackingStream as unknown as NodeJS.WritableStream, // Cast needed for pipeline compatibility
+        fileStream
+      );
+
+      logger.debug(`File stream finished for episode ${episodeId}`, { requestId, episodeId }); // Removed path from context
+      onProgress(100); // Final progress
+
+      // Update episode status in storage
+      await this.updateEpisode(episodeId, { isDownloaded: true });
+      logger.debug(`Updated episode ${episodeId} status to downloaded`, { requestId, episodeId });
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Download failed during streaming/saving for episode ${episodeId}: ${errorMessage}`, { requestId, episodeId });
+      // Clean up potentially partially downloaded file? (Optional)
+      // if (response && existsSync(storage.getAssetPath(episode.id, 'audio.mp3'))) {
+      //   await rm(storage.getAssetPath(episode.id, 'audio.mp3'));
+      // }
+      throw error; // Re-throw the error
+    }
   }
 
   async transcribeEpisode(episodeId: string): Promise<void> {

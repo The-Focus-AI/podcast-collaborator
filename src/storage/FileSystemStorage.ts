@@ -89,8 +89,9 @@ export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
   }
 
   // Asset Storage Implementation
-  private getAssetPath(episodeId: string, name: string): string {
-    return join(this.assetsPath, episodeId, `${name}.json`)
+  public getAssetPath(episodeId: string, name: string): string {
+    // Use the provided name directly, assuming it includes the correct extension
+    return join(this.assetsPath, episodeId, name)
   }
 
   async saveAsset(episodeId: string, asset: Asset): Promise<void> {
@@ -105,9 +106,9 @@ export class FileSystemStorage implements PodcastStorage, EpisodeStorage {
     const episodeAssetsDir = join(this.assetsPath, episodeId)
     await mkdir(episodeAssetsDir, { recursive: true })
 
-    // Save asset metadata and data
+    // Save the raw asset data (buffer) directly to the file
     const assetPath = this.getAssetPath(episodeId, asset.name)
-    await writeFile(assetPath, JSON.stringify(asset, null, 2))
+    await writeFile(assetPath, asset.data)
   }
 
   async getAsset(episodeId: string, name: string): Promise<Asset> {

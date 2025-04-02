@@ -211,6 +211,7 @@ export interface AssetStorage {
   getAsset(episodeId: string, name: string): Promise<Asset>
   listAssets(episodeId: string): Promise<Asset[]>
   deleteAsset(episodeId: string, name: string): Promise<void>
+  getAssetPath(episodeId: string, name: string): string // Added for direct path access
 }
 
 // Combined interface
