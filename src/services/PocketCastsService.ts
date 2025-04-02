@@ -3,6 +3,12 @@ import { Episode } from '@/storage/interfaces.js'
 import { OnePasswordService } from './OnePasswordService.js'
 import { logger } from '../utils/logger.js'
 import { v4 as uuidv4 } from 'uuid'
+import { promisify } from 'util'
+import { exec } from 'child_process'
+import { readFile, access } from 'fs/promises'
+import { constants } from 'fs'
+import { join } from 'path'
+import { homedir } from 'os'
 
 // Raw API response types
 export interface PocketCastsResponse {
@@ -55,8 +61,9 @@ export interface PocketCastsService {
   login(): Promise<void>
   getListenedEpisodes(): Promise<PocketCastsEpisode[]>
   getStarredEpisodes(): Promise<PocketCastsEpisode[]>
-  convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Episode
+  convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Promise<Episode>
   getEpisodeNotes(episodeId: string): Promise<string>
+  downloadEpisode(episode: Episode, onProgress: (progress: number) => void): Promise<Buffer>
 }
 
 export class PocketCastsServiceImpl implements PocketCastsService {
@@ -204,10 +211,20 @@ export class PocketCastsServiceImpl implements PocketCastsService {
     return validated.episodes
   }
 
-  convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Episode {
+  async convertToEpisode(pocketcastsEpisode: PocketCastsEpisode): Promise<Episode> {
     const progress = pocketcastsEpisode.duration > 0 
       ? Math.min(1, pocketcastsEpisode.playedUpTo / pocketcastsEpisode.duration)
       : 0;
+
+    // Check if audio file exists
+    const audioPath = join(homedir(), '.podcast-cli', 'assets', 'episodes', pocketcastsEpisode.uuid, 'audio.mp3');
+    let isDownloaded = false;
+    try {
+      await access(audioPath, constants.F_OK);
+      isDownloaded = true;
+    } catch {
+      // File doesn't exist
+    }
 
     return {
       id: pocketcastsEpisode.uuid,
@@ -224,7 +241,7 @@ export class PocketCastsServiceImpl implements PocketCastsService {
       progress,
       lastListenedAt: pocketcastsEpisode.playedUpTo > 0 ? new Date() : undefined,
       syncedAt: new Date(),
-      isDownloaded: false,
+      isDownloaded,
       hasTranscript: false
     };
   }
@@ -267,6 +284,27 @@ export class PocketCastsServiceImpl implements PocketCastsService {
         episodeId,
         source: 'pocketcasts-cache'
       });
+      throw error;
+    }
+  }
+
+  async downloadEpisode(episode: Episode, onProgress: (progress: number) => void): Promise<Buffer> {
+    const requestId = uuidv4();
+    const assetPath = join(homedir(), '.podcast-cli', 'assets', 'episodes', episode.id, 'audio.mp3');
+    
+    logger.debug(`Starting download for episode ${episode.id}`, { requestId, episodeId: episode.id });
+
+    // Use curl to download directly to assets folder
+    const escapedUrl = episode.url.replace(/'/g, "'\\''");
+    const curlCmd = `mkdir -p "${join(homedir(), '.podcast-cli', 'assets', 'episodes', episode.id)}" && curl -s -L -o '${assetPath}' '${escapedUrl}' &`;
+    
+    try {
+      await promisify(exec)(curlCmd);
+      logger.debug(`Download started in background for episode ${episode.id}`, { requestId, episodeId: episode.id });
+      return Buffer.from([]);  // Return empty buffer since we don't need it
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Download failed for episode ${episode.id}: ${errorMessage}`, { requestId, episodeId: episode.id });
       throw error;
     }
   }

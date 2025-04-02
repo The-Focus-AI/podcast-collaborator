@@ -139,7 +139,7 @@ export const EpisodeList: FC<EpisodeListProps> = ({
   }
 
   return (
-    <Box width="50%" borderStyle="single" borderColor={isFocused ? 'blue' : undefined}>
+    <Box borderStyle="single" borderColor={isFocused ? 'blue' : undefined}>
       {episodes.length === 0 ? (
         <Box>
           <Text dimColor>No episodes found. Press 's' to sync with PocketCasts.</Text>
@@ -153,7 +153,7 @@ export const EpisodeList: FC<EpisodeListProps> = ({
           {getVisibleEpisodes(sortedEpisodes, selectedIndex, process.stdout.rows - 4).map((episode, visibleIndex) => {
             const absoluteIndex = sortedEpisodes.indexOf(episode);
             const isSelected = absoluteIndex === selectedIndex;
-            const availableWidth = Math.floor(process.stdout.columns * 0.5) - 12 - 4 - 4;
+            const availableWidth = process.stdout.columns * 0.5 - 12 - 4 - 4;
             
             return (
               <Box key={episode.id}>

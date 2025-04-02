@@ -1,4 +1,4 @@
-import type { Episode, EpisodeNote, PodcastStorage } from '../storage/interfaces.js';
+import type { Episode, EpisodeNote, PodcastStorage, Asset } from '../storage/interfaces.js';
 import type { StorageProvider } from '../storage/StorageProvider.js';
 import type { PocketCastsService } from './PocketCastsService.js';
 import { logger } from '../utils/logger.js';
@@ -10,6 +10,8 @@ export interface EpisodeService {
   updateEpisode(episodeId: string, update: Partial<Episode>): Promise<Episode>;
   getStorage(): PodcastStorage;
   syncEpisodes(): Promise<Episode[]>;
+  downloadEpisode(episodeId: string, onProgress: (progress: number) => void): Promise<Asset>;
+  transcribeEpisode(episodeId: string): Promise<void>;
 }
 
 export class EpisodeServiceImpl implements EpisodeService {
@@ -28,26 +30,38 @@ export class EpisodeServiceImpl implements EpisodeService {
   }
 
   async syncEpisodes(): Promise<Episode[]> {
-    const storage = this.storageProvider.getStorage();
-    
-    // Get episodes from PocketCasts
-    await this.pocketCastsService.login();
-    const [listenedEpisodes, starredEpisodes] = await Promise.all([
-      this.pocketCastsService.getListenedEpisodes(),
-      this.pocketCastsService.getStarredEpisodes()
-    ]);
+    const requestId = uuidv4();
+    logger.debug('Starting episode sync', { requestId });
 
-    // Convert to our Episode format
-    const episodes = [...listenedEpisodes, ...starredEpisodes].map(
-      ep => this.pocketCastsService.convertToEpisode(ep)
-    );
+    try {
+      // Get episodes from PocketCasts
+      const [listenedEpisodes, starredEpisodes] = await Promise.all([
+        this.pocketCastsService.getListenedEpisodes(),
+        this.pocketCastsService.getStarredEpisodes()
+      ]);
 
-    // Save all episodes
-    await Promise.all(
-      episodes.map(episode => storage.saveEpisode(episode))
-    );
+      // Convert to our Episode format
+      const episodes = await Promise.all(
+        [...listenedEpisodes, ...starredEpisodes]
+          .map(ep => this.pocketCastsService.convertToEpisode(ep))
+      );
 
-    return episodes;
+      // Remove duplicates by id
+      const uniqueEpisodes = episodes.filter((ep, index) => 
+        index === episodes.findIndex(e => e.id === ep.id)
+      );
+
+      // Save all episodes
+      const storage = this.storageProvider.getStorage();
+      await Promise.all(
+        uniqueEpisodes.map(episode => storage.saveEpisode(episode))
+      );
+
+      return uniqueEpisodes;
+    } catch (error) {
+      logger.error(`Error syncing episodes: ${error instanceof Error ? error.message : 'Unknown error'}`, { requestId });
+      throw error;
+    }
   }
 
   async loadShowNotes(episodeId: string): Promise<EpisodeNote> {
@@ -103,5 +117,56 @@ export class EpisodeServiceImpl implements EpisodeService {
     const updatedEpisode = { ...episode, ...update };
     await storage.saveEpisode(updatedEpisode);
     return updatedEpisode;
+  }
+
+  async downloadEpisode(episodeId: string, onProgress: (progress: number) => void): Promise<Asset> {
+    const requestId = uuidv4();
+    logger.debug(`Starting download for episode ${episodeId}`, { requestId, episodeId });
+
+    // Get the episode from storage
+    const episode = await this.storageProvider.getStorage().getEpisode(episodeId);
+    if (!episode) {
+      throw new Error('Episode not found');
+    }
+
+    if (!episode.url) {
+      throw new Error('No download URL available');
+    }
+
+    // Download the file
+    await this.pocketCastsService.downloadEpisode(episode, onProgress);
+
+    // Update episode status
+    await this.updateEpisode(episodeId, { isDownloaded: true });
+
+    // Return empty asset since we don't need it
+    return {
+      id: episodeId,
+      episodeId,
+      type: 'audio',
+      name: 'audio',
+      data: Buffer.from([]),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+  }
+
+  async transcribeEpisode(episodeId: string): Promise<void> {
+    // For now, just mock the transcription process
+    const storage = this.storageProvider.getStorage();
+    const episode = await storage.getEpisode(episodeId);
+    if (!episode) {
+      throw new Error(`Episode ${episodeId} not found`);
+    }
+
+    // In a real implementation, this would:
+    // 1. Get the audio file
+    // 2. Send it to a transcription service
+    // 3. Save the transcription as an asset
+    // 4. Update the episode status
+
+    // For now, just update the episode status after a delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    await this.updateEpisode(episodeId, { hasTranscript: true });
   }
 } 

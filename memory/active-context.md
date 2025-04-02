@@ -1,44 +1,43 @@
-# Active Context - 2025-04-01 20:16 EDT
+# Active Context - 2025-04-01 20:20 EDT
 
 ## Current Focus
-Working on improving the podcast note display and navigation system with better UI/UX.
+Working on implementing episode playback functionality with download and transcription support.
 
 ## Current State
-- Fixed note scrolling and display issues
-- Improved keyboard navigation between panels
-- Enhanced layout and visual feedback
-- Added dynamic content handling
-- Fixed metadata spacing and overlap issues
+- Added episode player component
+- Implemented download tracking
+- Added mock transcription support
+- Enhanced panel navigation
+- Improved layout management
 
 ## Recent Improvements
-1. Note Display:
-   - Fixed word wrapping
-   - Dynamic height calculations
-   - Proper content spacing
-   - Better scroll indicators
-   - Fixed metadata overlap
-2. Navigation:
-   - Panel focus management
-   - Left/right panel switching
-   - Up/down scrolling in focused panel
+1. Player Features:
+   - Download progress tracking
+   - Playback controls
+   - Transcription status
+   - Progress indicators
+2. Service Layer:
+   - Download functionality
+   - Asset management
+   - Mock transcription
+   - Progress tracking
 3. Layout:
-   - Separated content sections
-   - Better progress display
+   - Three-panel design
    - Dynamic resizing
-   - Visual focus indicators
-   - Consistent spacing
+   - Improved navigation
+   - Better status display
 
 ## Next Steps
-1. Add search functionality within show notes
-2. Implement note export feature
-3. Add keyboard shortcuts help overlay
-4. Consider customizable themes
+1. Implement real audio playback
+2. Add transcription service integration
+3. Add keyboard shortcuts for seeking
+4. Add volume control
 
 ## Blockers
 None currently identified
 
 ## Notes
-- Consider adding search highlighting
-- May need to implement note content caching
-- Should add keyboard shortcut configuration
-- Consider adding custom note formatting options 
+- Consider caching downloaded audio files
+- May need to implement audio format conversion
+- Should add error recovery for failed downloads
+- Consider adding playback speed control 

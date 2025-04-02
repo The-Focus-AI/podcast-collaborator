@@ -5,8 +5,11 @@ import { SyncProgress } from './SyncProgress.js';
 import { EpisodeService } from '../services/EpisodeService.js';
 import { EpisodeList, FilterMode, SortMode } from './EpisodeList.js';
 import { EpisodeDetails } from './EpisodeDetails.js';
+import { EpisodePlayer } from './EpisodePlayer.js';
+import { HelpOverlay } from './HelpOverlay.js';
 
 type SyncStage = 'login' | 'fetching' | 'saving' | 'complete' | 'error';
+type ActivePanel = 'list' | 'details' | 'player';
 
 interface PodcastBrowserProps {
   episodes: Episode[];
@@ -29,7 +32,7 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
   const [syncMessage, setSyncMessage] = useState('');
   const [syncProgress, setSyncProgress] = useState({ count: 0, total: 0 });
   const [showHelp, setShowHelp] = useState(false);
-  const [focusedPanel, setFocusedPanel] = useState<'list' | 'details'>('list');
+  const [activePanel, setActivePanel] = useState<ActivePanel>('list');
   const { exit } = useApp();
 
   // Handle keyboard input for global actions
@@ -45,10 +48,25 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
       setShowHelp(true);
     } else if (input === 's' && !isSyncing) {
       handleSync();
-    } else if (key.leftArrow && focusedPanel === 'details') {
-      setFocusedPanel('list');
-    } else if (key.rightArrow && focusedPanel === 'list') {
-      setFocusedPanel('details');
+    } else if (key.return) {
+      // Enter key starts playback
+      if (activePanel === 'list' || activePanel === 'details') {
+        setActivePanel('player');
+      }
+    } else if (key.leftArrow) {
+      // Navigate panels left
+      if (activePanel === 'player') {
+        setActivePanel('details');
+      } else if (activePanel === 'details') {
+        setActivePanel('list');
+      }
+    } else if (key.rightArrow) {
+      // Navigate panels right
+      if (activePanel === 'list') {
+        setActivePanel('details');
+      } else if (activePanel === 'details') {
+        setActivePanel('player');
+      }
     }
   });
 
@@ -83,11 +101,12 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
     
     if (hours > 0) {
-      return `${hours}h${minutes}m`.padStart(6);
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
-    return `${minutes}m`.padStart(6);
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Format date in a readable format
@@ -105,10 +124,49 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
     ));
   };
 
+  const getFilteredAndSortedEpisodes = () => {
+    let filteredEpisodes = episodes;
+
+    if (isFiltering) {
+      filteredEpisodes = filteredEpisodes.filter(ep => 
+        ep.title.toLowerCase().includes(nameFilter.toLowerCase())
+      );
+    }
+
+    switch (filterMode) {
+      case 'starred':
+        filteredEpisodes = filteredEpisodes.filter(ep => ep.isStarred);
+        break;
+      case 'downloaded':
+        filteredEpisodes = filteredEpisodes.filter(ep => ep.isDownloaded);
+        break;
+      case 'transcribed':
+        filteredEpisodes = filteredEpisodes.filter(ep => ep.hasTranscript);
+        break;
+    }
+
+    switch (sortMode) {
+      case 'listened':
+        filteredEpisodes = filteredEpisodes.sort((a, b) => b.isListened ? -1 : 1);
+        break;
+      case 'alpha':
+        filteredEpisodes = filteredEpisodes.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'shortest':
+        filteredEpisodes = filteredEpisodes.sort((a, b) => a.duration - b.duration);
+        break;
+      case 'longest':
+        filteredEpisodes = filteredEpisodes.sort((a, b) => b.duration - a.duration);
+        break;
+    }
+
+    return filteredEpisodes;
+  };
+
   return (
     <Box flexDirection="column" height={process.stdout.rows}>
       {/* Header - Single line */}
-      <Box height={1}>
+      <Box height={1} flexShrink={0}>
         <Text>
           {isFiltering ? (
             <Text>Search: {nameFilter}</Text>
@@ -116,55 +174,79 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
             <Text>
               Filter: <Text color="green">{filterMode.toUpperCase()}</Text> | 
               Sort: <Text color="yellow">{sortMode.toUpperCase()}</Text> |
-              Panel: <Text color="blue">{focusedPanel.toUpperCase()}</Text>
+              Panel: <Text color="blue">{activePanel.toUpperCase()}</Text>
             </Text>
           )}
         </Text>
       </Box>
 
+      {/* Help Overlay */}
+      {showHelp && (
+        <HelpOverlay onClose={() => setShowHelp(false)} />
+      )}
+
       {/* Sync Progress */}
       {isSyncing && (
-        <SyncProgress
-          stage={syncStage}
-          message={syncMessage}
-          count={syncProgress.count}
-          total={syncProgress.total}
-        />
+        <Box height={1} flexShrink={0}>
+          <SyncProgress 
+            stage={syncStage} 
+            message={syncMessage} 
+            count={syncProgress.count}
+            total={syncProgress.total}
+          />
+        </Box>
       )}
 
       {/* Main Content Area */}
       <Box flexGrow={1} flexDirection="row">
-        <EpisodeList
-          episodes={episodes}
-          selectedIndex={selectedIndex}
-          onSelectedIndexChange={setSelectedIndex}
-          formatDate={formatDate}
-          isFiltering={isFiltering}
-          nameFilter={nameFilter}
-          onNameFilterChange={setNameFilter}
-          onFilteringChange={setIsFiltering}
-          filterMode={filterMode}
-          onFilterModeChange={setFilterMode}
-          sortMode={sortMode}
-          onSortModeChange={setSortMode}
-          isFocused={focusedPanel === 'list'}
-        />
-        <EpisodeDetails
-          episode={episodes[selectedIndex]}
-          episodeService={episodeService}
-          onEpisodeUpdate={handleEpisodeUpdate}
-          formatDate={formatDate}
-          formatDuration={formatDuration}
-          isFocused={focusedPanel === 'details'}
-        />
+        {/* Left Panel */}
+        <Box width="50%" flexShrink={0}>
+          <EpisodeList
+            episodes={episodes}
+            selectedIndex={selectedIndex}
+            onSelectedIndexChange={setSelectedIndex}
+            formatDate={formatDate}
+            isFiltering={isFiltering}
+            nameFilter={nameFilter}
+            onNameFilterChange={setNameFilter}
+            onFilteringChange={setIsFiltering}
+            filterMode={filterMode}
+            onFilterModeChange={setFilterMode}
+            sortMode={sortMode}
+            onSortModeChange={setSortMode}
+            isFocused={activePanel === 'list'}
+          />
+        </Box>
+
+        {/* Right Panel */}
+        <Box width="50%" flexShrink={0}>
+          {activePanel === 'player' ? (
+            <EpisodePlayer
+              episode={getFilteredAndSortedEpisodes()[selectedIndex]}
+              episodeService={episodeService}
+              formatDuration={formatDuration}
+              isFocused={true}
+            />
+          ) : (
+            <EpisodeDetails
+              episode={getFilteredAndSortedEpisodes()[selectedIndex]}
+              episodeService={episodeService}
+              onEpisodeUpdate={handleEpisodeUpdate}
+              formatDate={formatDate}
+              formatDuration={formatDuration}
+              isFocused={activePanel === 'details'}
+            />
+          )}
+        </Box>
       </Box>
 
       {/* Footer - Single line */}
-      <Box height={1}>
+      <Box height={1} flexShrink={0}>
         <Text dimColor>
           Press <Text color="yellow">?</Text> for help | 
           <Text color="yellow">←/→</Text> switch panels |
           <Text color="yellow">↑/↓</Text> navigate | 
+          <Text color="yellow">enter</Text> play |
           <Text color="yellow">s</Text> sync | 
           <Text color="yellow">q</Text> quit
         </Text>

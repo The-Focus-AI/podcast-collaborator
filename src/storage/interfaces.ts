@@ -182,20 +182,28 @@ export interface EpisodeStorage {
   getRawData(type: 'starred' | 'listened'): Promise<unknown[]>
 }
 
-// Asset (for downloaded content)
+// Asset interface for downloaded files
 export interface Asset {
-  type: string // 'audio', 'image', etc.
-  name: string
-  data: Buffer
-  downloadedAt: Date
+  id: string;
+  episodeId: string;
+  type: string;
+  name: string;
+  data: Buffer;
+  createdAt: Date;
+  updatedAt: Date;
+  metadata?: Record<string, unknown>;
 }
 
 export const AssetSchema = z.object({
+  id: z.string().min(1),
+  episodeId: z.string().min(1),
   type: z.string().min(1),
   name: z.string().min(1),
   data: z.instanceof(Buffer),
-  downloadedAt: z.date()
-})
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  metadata: z.record(z.unknown()).optional()
+});
 
 // Asset Storage Interface
 export interface AssetStorage {
