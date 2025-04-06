@@ -4,6 +4,7 @@ import { OnePasswordService } from '@/services/OnePasswordService.js'
 import { StorageProvider } from '@/storage/StorageProvider.js'
 import type { RawPocketCastsEpisode } from '@/storage/interfaces.js'
 import { logger } from '@/utils/logger.js'
+import { EpisodeServiceImpl } from '@/services/EpisodeService.js'
 
 export const sync = new Command('sync')
   .description('Sync episodes from PocketCasts')
@@ -34,6 +35,13 @@ export const sync = new Command('sync')
       logger.info(`Found ${listenedEpisodes.length} listened episodes`)
 
       logger.info('Raw episode data has been saved')
+
+      // Convert and save episodes in proper format
+      logger.info('Converting episodes to proper format...')
+      const episodeService = new EpisodeServiceImpl(storageProvider, service)
+      const episodes = await episodeService.syncEpisodes()
+      logger.info(`Converted and saved ${episodes.length} episodes`)
+
     } catch (error: unknown) {
       if (error instanceof Error) {
         logger.error(error, { source: 'sync' });

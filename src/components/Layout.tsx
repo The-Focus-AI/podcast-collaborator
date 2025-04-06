@@ -28,12 +28,12 @@ export const Layout: FC<LayoutProps> = ({
       {/* Main Content Area */}
       <Box flexGrow={1} flexDirection="row">
         {/* Left Panel */}
-        <Box width="50%" height="100%" flexGrow={1}>
+        <Box flexGrow={1} height="100%">
           {leftPanel}
         </Box>
 
         {/* Right Panel */}
-        <Box width="50%" height="100%" flexGrow={1}>
+        <Box flexGrow={1} height="100%">
           {rightPanel}
         </Box>
       </Box>

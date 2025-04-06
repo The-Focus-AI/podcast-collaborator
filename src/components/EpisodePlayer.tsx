@@ -320,6 +320,7 @@ export const EpisodePlayer = forwardRef<EpisodePlayerHandle, EpisodePlayerProps>
       flexDirection="column"
       borderColor={isFocused ? 'blue' : undefined}
       padding={1}
+      height="100%"
     >
       {/* Header */}
       <Box>
