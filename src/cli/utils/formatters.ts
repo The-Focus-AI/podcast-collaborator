@@ -19,10 +19,10 @@ export function formatDate(dateStr: string): string {
   return `${month} ${day}, ${year}`;
 }
 
-export function getStatusSymbols(episode: RawPocketCastsEpisode): string {
+export async function getStatusSymbols(episode: RawPocketCastsEpisode): Promise<string> {
   const starred = episode.starred ? chalk.yellow('★') : ' ';
   const listened = episode.playingStatus === 3 ? chalk.green('✓') : ' ';
-  const transcribed = false ? chalk.blue('T') : ' '; // TODO: Add actual transcription check
+  const transcribed = episode.hasTranscript ? chalk.blue('T') : ' ';
   return `${starred}${listened}${transcribed} `;
 }
 

@@ -84,7 +84,10 @@ export class TranscriptionService {
     return mimeType;
   }
 
-  async transcribeFile(filePath: string): Promise<Transcription> {
+  async transcribeFile(
+    filePath: string,
+    onProgress?: (progress: TranscriptionProgress) => void
+  ): Promise<Transcription> {
     const transcriptionId = uuidv4();
     return await this.retryOperation(async () => {
       const mimeType = this.getMimeType(filePath);
@@ -133,41 +136,93 @@ logger.info(`Receiving transcription stream from model...`);
 // We'll rely on the console logs for now. The spinner in transcribe.ts will stop on completion/error.
 
 let finalTranscription: Transcription | null = null;
-let streamReceivedData = false; // Flag to check if we got anything
+let lastSegmentCount = 0;
 
 logger.debug("Starting to process transcription stream...");
 try {
-  // Process the stream
   for await (const partial of stream.partialObjectStream) {
-    streamReceivedData = true; // Mark that we received something
-    // Log raw partial chunk confirmation
-    console.log("\n--- Received Stream Chunk ---"); // Add newline to separate from spinner
-    console.log(JSON.stringify(partial, null, 2)); // Uncomment to log the raw partial object structure
-    // Keep track of the latest object (simple approach)
-    if (partial) {
-        finalTranscription = partial as Transcription;
+    if (!partial) continue;
+    
+    const currentTranscription = partial as Transcription;
+    
+    // Clean up the segments by filtering out invalid ones
+    const validSegments = currentTranscription.segments.filter(segment => {
+      const isValid = 
+        segment.spoken_text?.trim().length > 0 && // Has non-empty text
+        segment.speaker?.trim().length > 0 && // Has non-empty speaker
+        segment.timestamp?.trim().length > 0 && // Has non-empty timestamp
+        Array.isArray(segment.topics) && segment.topics.length > 0; // Has topics
+
+      if (!isValid) {
+        logger.debug(`Filtered out invalid segment: ${JSON.stringify(segment)}`);
+      }
+      return isValid;
+    });
+
+    // Create cleaned transcription
+    const cleanedTranscription = {
+      ...currentTranscription,
+      segments: validSegments
+    };
+
+    finalTranscription = cleanedTranscription;
+
+    // Calculate progress
+    const currentSegmentCount = validSegments.length;
+    if (currentSegmentCount > lastSegmentCount) {
+      const newSegments = validSegments
+        .slice(lastSegmentCount)
+        .map(s => s.spoken_text);
+      
+      // Call progress callback if provided
+      if (onProgress) {
+        onProgress({
+          segmentCount: currentSegmentCount,
+          newSegments,
+          timestamp: new Date()
+        });
+      }
+
+      // Save debug info
+      await this.saveDebugInfo(
+        transcriptionId,
+        {
+          timestamp: new Date(),
+          totalSegments: currentSegmentCount,
+          newSegments,
+          filteredSegments: currentTranscription.segments.length - validSegments.length
+        },
+        "stream_progress"
+      );
+
+      lastSegmentCount = currentSegmentCount;
     }
   }
 } catch (streamError) {
   const errorMsg = streamError instanceof Error ? streamError.message : String(streamError);
   logger.error(`Error occurred during transcription stream processing: ${errorMsg}`);
-  // We might want to throw here or handle differently depending on desired behavior
+  
+  await this.saveDebugInfo(
+    transcriptionId,
+    {
+      error: errorMsg,
+      timestamp: new Date()
+    },
+    "stream_error"
+  );
+  
   throw streamError;
-} finally {
-  logger.debug("Finished processing transcription stream loop."); // Log after loop/error/finally
-}
-
-if (!streamReceivedData) {
-   logger.warn("Transcription stream finished but yielded no partial objects.");
 }
 
 if (!finalTranscription) {
   throw new Error("Transcription stream finished without producing a final object.");
 }
 
-logger.info(`Transcription stream finished.`);
+if (finalTranscription.segments.length === 0) {
+  throw new Error("Transcription finished but no valid segments were produced.");
+}
 
-// Save the final reconstructed object for debugging
+logger.info(`Transcription stream finished with ${finalTranscription.segments.length} valid segments.`);
 await this.saveDebugInfo(transcriptionId, finalTranscription, "final_streamed_object");
 
 return finalTranscription;

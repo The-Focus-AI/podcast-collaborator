@@ -91,42 +91,57 @@ export function createTranscribeCommand(
         await storage.saveTranscription(status);
 
         // Start transcription
-        spinner.start("Transcribing audio...");
-        // try {
-          const transcription =
-            await transcriptionService.transcribeFile(audioPath);
+        spinner.start("Starting transcription...");
+        try {
+          const transcription = await transcriptionService.transcribeFile(
+            audioPath,
+            (progress) => {
+              // Clear the spinner temporarily
+              spinner.clear();
+              
+              // Show new segments
+              if (progress.newSegments.length > 0) {
+                console.log(chalk.cyan(`\nNew transcription segments (${progress.segmentCount} total):`));
+                progress.newSegments.forEach(text => {
+                  console.log(chalk.gray(`"${text.trim()}"`));
+                });
+              }
+              
+              // Update spinner text and restart
+              spinner.text = chalk.yellow(`Transcribing audio... (${progress.segmentCount} segments)`);
+              spinner.render();
+            }
+          );
 
           status.status = "completed";
           status.transcription = transcription;
           status.metadata.updatedAt = new Date();
           status.metadata.completedAt = new Date();
-        // } catch (error) {
-        //   spinner.fail(
-        //     `Transcription failed: ${error instanceof Error ? error.message : String(error)}`
-        //   );
-        //   status.status = "failed";
-        //   status.metadata.error =
-        //     error instanceof Error ? error.message : String(error);
-        // }
 
-        // Save transcription
-        await storage.saveTranscription(status);
-        
-        // Also update the main episode record to mark transcription as complete
-        await episodeService.updateEpisode(episode.id, { hasTranscript: true });
+          // Save transcription
+          await storage.saveTranscription(status);
+          
+          // Update episode record
+          await episodeService.updateEpisode(episode.id, { hasTranscript: true });
 
-        spinner.succeed("Transcription completed and episode status updated");
+          spinner.succeed("Transcription completed");
 
-        // Display summary
-        logger.info(chalk.green("\nTranscription completed successfully:"));
-        logger.info(`Total segments: ${transcription.segments.length}`);
-        logger.info(
-          `Word count: ${transcription.segments.reduce(
-            (count, segment) => count + segment.spoken_text.split(/\s+/).length,
-            0
-          )}`
-        );
-        logger.info(`Duration: ${episode.duration} seconds`);
+          // Display summary
+          console.log(chalk.green("\nTranscription completed successfully:"));
+          console.log(`Total segments: ${transcription.segments.length}`);
+          console.log(
+            `Word count: ${transcription.segments.reduce(
+              (count, segment) => count + segment.spoken_text.split(/\s+/).length,
+              0
+            )}`
+          );
+          console.log(`Duration: ${episode.duration} seconds`);
+        } catch (error) {
+          spinner.fail(
+            `Transcription failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+          throw error;
+        }
       } catch (error) {
         spinner.fail(
           `Transcription failed: ${error instanceof Error ? error.message : String(error)}`
