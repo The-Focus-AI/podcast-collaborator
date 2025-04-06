@@ -142,8 +142,7 @@ try {
     streamReceivedData = true; // Mark that we received something
     // Log raw partial chunk confirmation
     console.log("\n--- Received Stream Chunk ---"); // Add newline to separate from spinner
-    // console.log(partial); // Log the raw object structure if needed
-    
+    console.log(JSON.stringify(partial, null, 2)); // Uncomment to log the raw partial object structure
     // Keep track of the latest object (simple approach)
     if (partial) {
         finalTranscription = partial as Transcription;

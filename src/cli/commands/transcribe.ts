@@ -111,8 +111,11 @@ export function createTranscribeCommand(
 
         // Save transcription
         await storage.saveTranscription(status);
+        
+        // Also update the main episode record to mark transcription as complete
+        await episodeService.updateEpisode(episode.id, { hasTranscript: true });
 
-        spinner.succeed("Transcription completed");
+        spinner.succeed("Transcription completed and episode status updated");
 
         // Display summary
         logger.info(chalk.green("\nTranscription completed successfully:"));

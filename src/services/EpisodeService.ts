@@ -1,11 +1,14 @@
-import type { Episode, EpisodeNote, PodcastStorage, Asset } from '../storage/interfaces.js';
+import type { Episode, EpisodeNote, PodcastStorage, Asset, Transcription } from '../storage/interfaces.js'; // Added Transcription
 import type { StorageProvider } from '../storage/StorageProvider.js';
 import type { PocketCastsService } from './PocketCastsService.js';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { createWriteStream } from 'fs';
-import { mkdir } from 'fs/promises'; // Added mkdir import
+import { mkdir, readFile } from 'fs/promises'; // Added mkdir, readFile import
 import { pipeline } from 'stream/promises';
+import { CoreMessage, streamText, StreamTextResult, ToolSet } from "ai"; // Added AI SDK imports
+import { createGoogleGenerativeAI } from "@ai-sdk/google"; // Correct import for Google AI
+import { OnePasswordService } from "./OnePasswordService.js"; // Added 1Password service
 
 export interface EpisodeService {
   listEpisodes(): Promise<Episode[]>;
@@ -19,14 +22,35 @@ export interface EpisodeService {
   getEpisodeAudioPath(episodeId: string): Promise<string | null>; // Added
   transcribeEpisode(episodeId: string): Promise<void>;
   getEpisodeTranscriptPath(episodeId: string): Promise<string | null>; // Added
-  chatWithEpisode(episodeId: string, message: string): Promise<string>; // Added
+  // Update return type to match implementation
+  chatWithEpisode(episodeId: string, message: string): Promise<StreamTextResult<ToolSet, unknown>>;
 }
 
 export class EpisodeServiceImpl implements EpisodeService {
+  // Simple in-memory store for conversation history per episode
+  private chatHistories: Map<string, CoreMessage[]> = new Map();
+  private googleAI: ReturnType<typeof createGoogleGenerativeAI> | null = null;
+  private onePasswordService: OnePasswordService; // Add for API key retrieval
+
   constructor(
     private readonly storageProvider: StorageProvider,
     private readonly pocketCastsService: PocketCastsService
-  ) {}
+  ) {
+    // Instantiate 1Password service here or inject if preferred
+    this.onePasswordService = new OnePasswordService();
+  }
+
+  // Helper to initialize Google AI client
+  private async getGoogleAI() {
+    if (!this.googleAI) {
+      const apiKey = await this.onePasswordService.getGoogleApiKey();
+      if (!apiKey) {
+        throw new Error("Google API key not found in 1Password.");
+      }
+      this.googleAI = createGoogleGenerativeAI({ apiKey });
+    }
+    return this.googleAI;
+  }
 
   getStorage(): PodcastStorage {
     return this.storageProvider.getStorage();
@@ -284,43 +308,104 @@ export class EpisodeServiceImpl implements EpisodeService {
     await this.updateEpisode(episodeId, { hasTranscript: true });
   }
 
+  // Modified to just check the flag, not return a real path
   async getEpisodeTranscriptPath(episodeId: string): Promise<string | null> {
-    const storage = this.storageProvider.getStorage();
-    const episode = await storage.getEpisode(episodeId);
+    const episode = await this.getEpisode(episodeId);
     if (!episode || !episode.hasTranscript) {
-       logger.warn(`Transcript path requested for episode ${episodeId}, but it's not transcribed or doesn't exist.`);
+       logger.warn(`Transcript check failed for episode ${episodeId}: Episode not found or hasTranscript flag is false.`);
       return null;
     }
-    // Assuming transcript asset name convention
-    const assetName = 'transcript.txt'; // Or .json, .vtt etc. depending on implementation
-    try {
-      const assetPath = storage.getAssetPath(episode.id, assetName);
-      // Optional: Check file existence
-      // await fs.promises.access(assetPath);
-      return assetPath;
-    } catch (error) {
-      logger.error(`Error accessing transcript asset path for episode ${episodeId}`, { episodeId });
-      // console.error(error);
-      return null;
-    }
+    // Return a non-null string to indicate availability, even if path isn't used directly by chat
+    logger.debug(`Transcript check successful for episode ${episodeId} based on hasTranscript flag.`);
+    return "available";
   }
 
-  async chatWithEpisode(episodeId: string, message: string): Promise<string> {
-    // Mock implementation for now
+  // Updated to return a stream
+  async chatWithEpisode(episodeId: string, message: string): Promise<ReturnType<typeof streamText>> {
     logger.info(`Chat initiated for episode ${episodeId} with message: "${message}"`);
+    const storage = this.storageProvider.getStorage();
+
+    // 1. Get Episode and Transcript
     const episode = await this.getEpisode(episodeId);
     if (!episode) {
-      return "Error: Episode not found.";
+      throw new Error("Episode not found.");
     }
-    if (!episode.hasTranscript) {
-      return "Error: Episode has not been transcribed yet.";
+    const transcriptionData = await storage.getTranscriptionByEpisodeId(episodeId); // Use correct method
+    if (!transcriptionData || transcriptionData.status !== 'completed' || !transcriptionData.transcription) {
+      throw new Error("Episode transcript not found or not completed.");
     }
-    // In a real implementation:
-    // 1. Load transcript content using getEpisodeTranscriptPath
-    // 2. Prepare context/prompt for LLM
-    // 3. Call LLM service
-    // 4. Return response
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate LLM call
-    return `Mock response for "${message}" regarding episode "${episode.title}".`;
+    
+    // Format transcript segments as JSON to preserve structure
+    const transcriptContext = JSON.stringify(transcriptionData.transcription.segments, null, 2);
+
+    // 2. Manage History
+    if (!this.chatHistories.has(episodeId)) {
+      this.chatHistories.set(episodeId, []);
+    }
+    const history = this.chatHistories.get(episodeId)!;
+
+    // Add user message to history
+    history.push({ role: 'user', content: message });
+
+    // 3. Construct Prompt/Messages
+    const systemPrompt = `You are a helpful assistant knowledgeable about the podcast episode titled "${episode.title}". Use the provided transcript context (formatted as a JSON array of segments, including 'timestamp', 'speaker', 'spoken_text', and 'topics') to answer questions accurately. Refer to timestamps when relevant. Transcript Context:\n\n${transcriptContext}`;
+    
+    const messages: CoreMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...history // Include previous messages
+    ];
+
+    // 4. Call LLM via streamText
+    try {
+      const google = await this.getGoogleAI();
+      // Define model - consider a cheaper/faster one for chat if appropriate
+      const model = google('models/gemini-1.5-flash-latest');
+
+      const streamResult = await streamText({
+        model: model,
+        messages: messages,
+        // Optional: Add temperature, maxTokens etc.
+      });
+
+      // We need to consume the stream slightly to capture the assistant's response for history
+      // This is a bit tricky; ideally, the caller handles the stream AND updates history.
+      // For now, let's create a pass-through stream to capture the full response.
+      
+      let fullResponse = '';
+      const responseStream = new ReadableStream({
+         async start(controller) {
+            const reader = streamResult.textStream.getReader();
+            try {
+               while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  fullResponse += value; // Capture response text
+                  controller.enqueue(value); // Pass chunk along
+               }
+               controller.close();
+            } catch (error) {
+               controller.error(error);
+            } finally {
+               reader.releaseLock();
+               // Add assistant response to history AFTER stream is done
+               if (fullResponse) {
+                  history.push({ role: 'assistant', content: fullResponse });
+               }
+            }
+         }
+      });
+
+      // Return a new object containing the stream and other potential info
+      return {
+         ...streamResult, // Include original stream properties if needed
+         textStream: responseStream // Return the pass-through stream
+      };
+
+    } catch (error) {
+      // Remove the user message from history if the API call failed
+      history.pop();
+      logger.error(`LLM chat API call failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
   }
 }
