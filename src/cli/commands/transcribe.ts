@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { StorageProvider } from "../../storage/StorageProvider.js";
-import { PocketCastsService } from "../../services/PocketCastsService.js";
-import { EpisodeServiceImpl } from "../../services/EpisodeService.js";
+import type { PocketCastsService } from "../../services/PocketCastsService.js"; // Use type import
+import { EpisodeServiceImpl, EpisodeService } from "../../services/EpisodeService.js"; // Import type EpisodeService
 import { TranscriptionService } from "../../services/TranscriptionService.js";
 import chalk from "chalk";
 import { logger } from "../../utils/logger.js";
@@ -12,30 +12,31 @@ import { TranscriptionStatus } from "@/storage/interfaces.js";
 
 export function createTranscribeCommand(
   storageProvider: StorageProvider,
-  pocketCastsService: PocketCastsService,
-  onePasswordService: OnePasswordService
+  pocketCastsService: PocketCastsService, // Keep this as it's passed in
+  onePasswordService: OnePasswordService,
+  episodeService: EpisodeService // Add EpisodeService dependency
 ): Command {
   return new Command("transcribe")
     .description("Transcribe an episode's audio")
-    .argument("<episodeId>", "ID of the episode to transcribe")
+    .argument("<partialEpisodeId>", "The first part of the episode ID (e.g., 3dc1b2d6)")
     .option("-f, --force", "Force re-transcription even if it already exists")
-    .action(async (episodeId: string, options) => {
+    .action(async (partialEpisodeId: string, options) => {
       const spinner = ora();
       const storage = storageProvider.getStorage();
-      const episodeService = new EpisodeServiceImpl(
-        storageProvider,
-        pocketCastsService
-      );
+      // Use the injected episodeService, remove local instantiation
 
       try {
-        // Check if episode exists
-        const episode = await storage.getEpisode(episodeId);
+        // Find episode by partial ID
+        spinner.start(`Finding episode starting with ID: ${partialEpisodeId}...`);
+        const episode = await episodeService.findEpisodeByPartialId(partialEpisodeId);
         if (!episode) {
-          throw new Error(`Episode ${episodeId} not found`);
+          spinner.fail(`Could not uniquely identify episode with partial ID "${partialEpisodeId}".`);
+          process.exit(1);
         }
+        spinner.succeed(`Found episode: ${episode.title} (${episode.id})`);
 
-        // Check if transcription exists and handle force flag
-        const existingTranscription = await storage.getTranscription(episodeId);
+        // Check if transcription exists and handle force flag (use full episode.id)
+        const existingTranscription = await storage.getTranscription(episode.id);
         if (existingTranscription && !options.force) {
           if (existingTranscription.status === "completed") {
             spinner.info(
@@ -48,12 +49,12 @@ export function createTranscribeCommand(
           }
         }
 
-        // Check if episode is downloaded
-        const assets = await storage.listAssets(episodeId);
+        // Check if episode is downloaded (use full episode.id)
+        const assets = await storage.listAssets(episode.id);
         const audioAsset = assets.find((a) => a.name === "audio.mp3");
         if (!audioAsset) {
           spinner.start("Downloading episode audio...");
-          await episodeService.downloadEpisode(episodeId, (progress) => {
+          await episodeService.downloadEpisode(episode.id, (progress: number) => { // Use full episode.id, add type for progress
             spinner.text = `Downloading episode audio... ${Math.round(progress * 100)}%`;
           });
           spinner.succeed("Episode downloaded");
@@ -72,12 +73,12 @@ export function createTranscribeCommand(
           apiKey,
         });
 
-        // Get absolute path to audio file
-        const audioPath = storage.getAssetPath(episodeId, "audio.mp3");
+        // Get absolute path to audio file (use full episode.id)
+        const audioPath = storage.getAssetPath(episode.id, "audio.mp3");
 
         const status: TranscriptionStatus = {
           id: uuidv4(),
-          episodeId,
+          episodeId: episode.id, // Use full episode.id
           status: "processing",
           model: transcriptionService.model,
           metadata: {

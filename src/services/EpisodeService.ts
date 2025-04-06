@@ -9,12 +9,17 @@ import { pipeline } from 'stream/promises';
 
 export interface EpisodeService {
   listEpisodes(): Promise<Episode[]>;
+  getEpisode(episodeId: string): Promise<Episode | null>; // Added
+  findEpisodeByPartialId(partialId: string): Promise<Episode | null>; // Added for CLI convenience
   loadShowNotes(episodeId: string): Promise<EpisodeNote>;
   updateEpisode(episodeId: string, update: Partial<Episode>): Promise<Episode>;
   getStorage(): PodcastStorage;
   syncEpisodes(): Promise<Episode[]>;
   downloadEpisode(episodeId: string, onProgress: (progress: number) => void): Promise<void>; // Updated return type
+  getEpisodeAudioPath(episodeId: string): Promise<string | null>; // Added
   transcribeEpisode(episodeId: string): Promise<void>;
+  getEpisodeTranscriptPath(episodeId: string): Promise<string | null>; // Added
+  chatWithEpisode(episodeId: string, message: string): Promise<string>; // Added
 }
 
 export class EpisodeServiceImpl implements EpisodeService {
@@ -35,6 +40,36 @@ export class EpisodeServiceImpl implements EpisodeService {
     episodes.sort((a, b) => b.publishDate.getTime() - a.publishDate.getTime());
 
     return episodes;
+  }
+
+  async getEpisode(episodeId: string): Promise<Episode | null> {
+    const storage = this.storageProvider.getStorage();
+    try {
+      const episode = await storage.getEpisode(episodeId);
+      return episode;
+    } catch (error) {
+      // Assuming storage throws if not found, or returns null/undefined
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.warn(`Episode ${episodeId} not found in storage: ${errorMessage}`, { episodeId });
+      return null;
+    }
+  }
+ 
+  async findEpisodeByPartialId(partialId: string): Promise<Episode | null> {
+    const storage = this.storageProvider.getStorage();
+    const allEpisodes = await storage.listEpisodes(); // Fetch all episodes
+    
+    const matchingEpisodes = allEpisodes.filter(ep => ep.id.startsWith(partialId));
+ 
+    if (matchingEpisodes.length === 1) {
+      return matchingEpisodes[0]; // Unique match found
+    } else if (matchingEpisodes.length > 1) {
+      logger.warn(`Multiple episodes found starting with ID "${partialId}". Please provide a more specific ID.`);
+      return null;
+    } else {
+      logger.warn(`No episode found starting with ID "${partialId}".`);
+      return null;
+    }
   }
 
   async syncEpisodes(): Promise<Episode[]> {
@@ -206,6 +241,30 @@ export class EpisodeServiceImpl implements EpisodeService {
     }
   }
 
+  async getEpisodeAudioPath(episodeId: string): Promise<string | null> {
+    const storage = this.storageProvider.getStorage();
+    const episode = await storage.getEpisode(episodeId);
+    if (!episode || !episode.isDownloaded) {
+      logger.warn(`Audio path requested for episode ${episodeId}, but it's not downloaded or doesn't exist.`);
+      return null;
+    }
+    // Assuming asset name is consistent
+    const assetName = 'audio.mp3';
+    try {
+      // Check if the asset actually exists on disk (optional but good practice)
+      const assetPath = storage.getAssetPath(episode.id, assetName);
+      // You might want to add an fs.promises.access check here in a real scenario
+      // await fs.promises.access(assetPath);
+      return assetPath;
+    } catch (error) {
+      logger.error(`Error accessing audio asset path for episode ${episodeId}`, { episodeId });
+      // Log the actual error object separately if needed for more detail,
+      // but don't pass it in the context object.
+      // console.error(error);
+      return null;
+    }
+  }
+
   async transcribeEpisode(episodeId: string): Promise<void> {
     // For now, just mock the transcription process
     const storage = this.storageProvider.getStorage();
@@ -224,4 +283,44 @@ export class EpisodeServiceImpl implements EpisodeService {
     await new Promise(resolve => setTimeout(resolve, 2000));
     await this.updateEpisode(episodeId, { hasTranscript: true });
   }
-} 
+
+  async getEpisodeTranscriptPath(episodeId: string): Promise<string | null> {
+    const storage = this.storageProvider.getStorage();
+    const episode = await storage.getEpisode(episodeId);
+    if (!episode || !episode.hasTranscript) {
+       logger.warn(`Transcript path requested for episode ${episodeId}, but it's not transcribed or doesn't exist.`);
+      return null;
+    }
+    // Assuming transcript asset name convention
+    const assetName = 'transcript.txt'; // Or .json, .vtt etc. depending on implementation
+    try {
+      const assetPath = storage.getAssetPath(episode.id, assetName);
+      // Optional: Check file existence
+      // await fs.promises.access(assetPath);
+      return assetPath;
+    } catch (error) {
+      logger.error(`Error accessing transcript asset path for episode ${episodeId}`, { episodeId });
+      // console.error(error);
+      return null;
+    }
+  }
+
+  async chatWithEpisode(episodeId: string, message: string): Promise<string> {
+    // Mock implementation for now
+    logger.info(`Chat initiated for episode ${episodeId} with message: "${message}"`);
+    const episode = await this.getEpisode(episodeId);
+    if (!episode) {
+      return "Error: Episode not found.";
+    }
+    if (!episode.hasTranscript) {
+      return "Error: Episode has not been transcribed yet.";
+    }
+    // In a real implementation:
+    // 1. Load transcript content using getEpisodeTranscriptPath
+    // 2. Prepare context/prompt for LLM
+    // 3. Call LLM service
+    // 4. Return response
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate LLM call
+    return `Mock response for "${message}" regarding episode "${episode.title}".`;
+  }
+}

@@ -13,6 +13,9 @@ import { createBrowseCommand } from './cli/commands/browse.js';
 import { createListCommand } from './cli/commands/list.js';
 import { createNotesCommand } from './cli/commands/notes.js';
 import { createTranscribeCommand } from './cli/commands/transcribe.js';
+import { createPlayCommand } from './cli/commands/play.js'; // Added
+import { createChatCommand } from './cli/commands/chat.js'; // Added
+import { EpisodeServiceImpl } from './services/EpisodeService.js'; // Added for instantiation
 
 async function getPackageVersion(): Promise<string> {
   const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -28,6 +31,7 @@ async function main() {
     const storageProvider = new StorageProvider();
     const onePasswordService = new OnePasswordService();
     const pocketCastsService = new PocketCastsServiceImpl(onePasswordService);
+    const episodeService = new EpisodeServiceImpl(storageProvider, pocketCastsService); // Instantiate EpisodeService
 
     program
       .name('podcast-cli')
@@ -39,8 +43,10 @@ async function main() {
     program.addCommand(createVersionCommand());
     program.addCommand(createListCommand(storageProvider));
     program.addCommand(createNotesCommand(storageProvider, pocketCastsService));
-    program.addCommand(createTranscribeCommand(storageProvider, pocketCastsService, onePasswordService));
-    
+    program.addCommand(createTranscribeCommand(storageProvider, pocketCastsService, onePasswordService, episodeService)); // Pass episodeService
+    program.addCommand(createPlayCommand(episodeService)); // Pass EpisodeService
+    program.addCommand(createChatCommand(episodeService)); // Pass EpisodeService
+
     // Add browse command and set it as default
     const browseCommand = createBrowseCommand(storageProvider, pocketCastsService);
     program.addCommand(browseCommand);

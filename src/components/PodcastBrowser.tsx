@@ -297,7 +297,8 @@ export const PodcastBrowser: FC<PodcastBrowserProps> = ({
               <Text color="yellow">←/→</Text> seek |
               {playerState.transcriptionStatus === 'completed' ? (
                 <>
-                  <Text color="yellow">t</Text> {playerState.showTranscript ? 'hide' : 'show'} transcript
+                  <Text color="yellow">t</Text> {playerState.showTranscript ? 'hide' : 'show'} transcript |
+                  <Text color="yellow">c</Text> chat
                   {playerState.showTranscript && ' | ↑/↓ navigate segments'}
                 </>
               ) : playerState.transcriptionStatus === 'pending' && (

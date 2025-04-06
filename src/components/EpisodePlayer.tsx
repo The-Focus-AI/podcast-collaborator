@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { OnePasswordService } from '../services/OnePasswordService.js';
 import { TranscriptScrollArea } from './TranscriptScrollArea.js';
 import { ScrollArea } from './ScrollArea.js';
-
+import { logger } from '../utils/logger.js'; // Added logger import
 interface EpisodePlayerProps {
   episode: Episode;
   episodeService: EpisodeService;
@@ -49,6 +49,9 @@ export const EpisodePlayer = forwardRef<EpisodePlayerHandle, EpisodePlayerProps>
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
   const [showTranscript, setShowTranscript] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isChatting, setIsChatting] = useState(false); // Added for chat input mode
+  const [chatInput, setChatInput] = useState(''); // Added for chat message
+  const [chatResponse, setChatResponse] = useState<string | null>(null); // Added for chat response display
 
   // Notify parent of state changes
   useEffect(() => {
@@ -239,52 +242,65 @@ export const EpisodePlayer = forwardRef<EpisodePlayerHandle, EpisodePlayerProps>
     loadTranscription();
   }, [episode.id]);
 
-  // Public methods exposed via ref
-  React.useImperativeHandle(ref, () => ({
-    toggleTranscript: () => {
-      if (transcriptionStatus === 'completed') {
-        setShowTranscript(!showTranscript);
-      } else if (transcriptionStatus === 'pending' && !isTranscribing) {
-        startTranscription();
+  // --- Internal Action Handlers ---
+ 
+  const toggleTranscriptHandler = () => {
+    if (transcriptionStatus === 'completed') {
+      setShowTranscript(!showTranscript);
+    } else if (transcriptionStatus === 'pending' && !isTranscribing) {
+      startTranscription();
+    }
+  };
+ 
+  const navigateTranscriptHandler = (direction: 'up' | 'down') => {
+    if (showTranscript && transcriptionStatus === 'completed' && transcription?.transcription?.segments) {
+      // Navigate transcript segments
+      let newIndex = currentSegmentIndex;
+      if (direction === 'up' && currentSegmentIndex > 0) {
+        newIndex = currentSegmentIndex - 1;
+      } else if (direction === 'down' && currentSegmentIndex < transcription.transcription.segments.length - 1) {
+        newIndex = currentSegmentIndex + 1;
       }
-    },
-    navigateTranscript: (direction: 'up' | 'down') => {
-      if (transcriptionStatus === 'completed' && transcription?.transcription?.segments) {
-        // Navigate transcript segments
-        if (direction === 'up' && currentSegmentIndex > 0) {
-          setCurrentSegmentIndex(currentSegmentIndex - 1);
-          // Jump to segment timestamp
-          const segment = transcription.transcription.segments[currentSegmentIndex - 1];
-          const [minutes, seconds] = segment.timestamp.split(':').map(Number);
-          setPlaybackProgress(minutes * 60 + seconds);
-        } else if (direction === 'down' && currentSegmentIndex < transcription.transcription.segments.length - 1) {
-          setCurrentSegmentIndex(currentSegmentIndex + 1);
-          // Jump to segment timestamp
-          const segment = transcription.transcription.segments[currentSegmentIndex + 1];
-          const [minutes, seconds] = segment.timestamp.split(':').map(Number);
-          setPlaybackProgress(minutes * 60 + seconds);
-        }
-      } else {
-        // No transcript - adjust playback position
-        setPlaybackProgress(prev => {
-          const newProgress = direction === 'up'
-            ? Math.min(prev + 30, episode.duration)
-            : Math.max(0, prev - 30);
-          return newProgress;
-        });
+      
+      if (newIndex !== currentSegmentIndex) {
+        setCurrentSegmentIndex(newIndex);
+        // Jump to segment timestamp
+        const segment = transcription.transcription.segments[newIndex];
+        const [minutes, seconds] = segment.timestamp.split(':').map(Number);
+        setPlaybackProgress(minutes * 60 + seconds);
       }
-    },
-    togglePlayback: () => {
-      setPlayerState(state => state === 'playing' ? 'paused' : 'playing');
-    },
-    seek: (direction: 'forward' | 'backward', seconds?: number) => {
+    } else {
+      // No transcript shown/available - adjust playback position (seek large)
       setPlaybackProgress(prev => {
-        const newProgress = direction === 'forward' 
-          ? Math.min(prev + (seconds || 30), episode.duration)
-          : Math.max(0, prev - (seconds || 30));
+        const newProgress = direction === 'up'
+          ? Math.min(prev + 60, episode.duration) // Seek forward 60s
+          : Math.max(0, prev - 60); // Seek backward 60s
         return newProgress;
       });
     }
+  };
+ 
+  const togglePlaybackHandler = () => {
+    if (playerState === 'ready' || playerState === 'paused' || playerState === 'playing') {
+       setPlayerState(state => state === 'playing' ? 'paused' : 'playing');
+    }
+  };
+ 
+  const seekHandler = (direction: 'forward' | 'backward', seconds?: number) => {
+    setPlaybackProgress(prev => {
+      const newProgress = direction === 'forward'
+        ? Math.min(prev + (seconds || 15), episode.duration) // Default seek 15s
+        : Math.max(0, prev - (seconds || 15)); // Default seek 15s
+      return newProgress;
+    });
+  };
+ 
+  // Public methods exposed via ref
+  React.useImperativeHandle(ref, () => ({
+    toggleTranscript: toggleTranscriptHandler,
+    navigateTranscript: navigateTranscriptHandler,
+    togglePlayback: togglePlaybackHandler,
+    seek: seekHandler,
   }));
 
   // Update status display text based on transcription status
@@ -305,11 +321,64 @@ export const EpisodePlayer = forwardRef<EpisodePlayerHandle, EpisodePlayerProps>
     }
   };
 
-  useInput((input, key) => {
-    if( !isFocused) return;
+  // Handle chat submission
+  const handleChatSubmit = async () => {
+    if (!chatInput.trim()) return; // Don't submit empty messages
 
-    if( input === 't' ) {
-      setShowTranscript(!showTranscript);
+    setIsChatting(false); // Exit chat mode immediately
+    setChatResponse('Thinking...'); // Indicate processing
+
+    try {
+      const response = await episodeService.chatWithEpisode(episode.id, chatInput);
+      setChatResponse(response);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to get chat response';
+      setChatResponse(`Error: ${message}`);
+      logger.error(`Chat failed for episode ${episode.id}: ${message}`);
+    } finally {
+      setChatInput(''); // Clear input after submission attempt
+    }
+  };
+
+  useInput((input, key) => {
+    if (!isFocused) return;
+
+    if (isChatting) {
+      if (key.return) {
+        handleChatSubmit();
+      } else if (key.escape) {
+        setIsChatting(false);
+        setChatInput('');
+        setChatResponse(null); // Clear any previous response/error
+      } else if (key.backspace || key.delete) {
+        setChatInput(prev => prev.slice(0, -1));
+      } else if (input) {
+        // Append typed character if it's printable
+        // This is a basic check; more robust handling might be needed
+        if (input.length === 1 && !key.ctrl && !key.meta) {
+           setChatInput(prev => prev + input);
+        }
+      }
+    } else {
+      // Not chatting - handle other commands
+      if (input === 't') {
+        toggleTranscriptHandler(); // Call directly
+      } else if (input === 'c' && transcriptionStatus === 'completed') {
+        setIsChatting(true);
+        setChatInput(''); // Clear previous input
+        setChatResponse(null); // Clear previous response
+      } else if (input === ' ') {
+        togglePlaybackHandler(); // Call directly
+      } else if (key.leftArrow) {
+        seekHandler('backward'); // Call directly
+      } else if (key.rightArrow) {
+        seekHandler('forward'); // Call directly
+      } else if (key.upArrow) {
+        navigateTranscriptHandler('up'); // Call directly
+      } else if (key.downArrow) {
+        navigateTranscriptHandler('down'); // Call directly
+      }
+      // Note: 'q', 's', '?' are handled globally in PodcastBrowser
     }
   });
 
@@ -380,11 +449,25 @@ export const EpisodePlayer = forwardRef<EpisodePlayerHandle, EpisodePlayerProps>
         </Box>
       )}
 
+      {/* Chat Input/Output */}
+      {isChatting && (
+        <Box marginTop={1}>
+          <Text color="cyan">&gt; Chat: {chatInput}</Text>
+          {/* TODO: Add a blinking cursor simulation? */}
+        </Box>
+      )}
+      {chatResponse && !isChatting && (
+         <Box marginTop={1} flexDirection="column">
+           <Text bold color="cyan">Chat Response:</Text>
+           <Text wrap="wrap">{chatResponse}</Text>
+         </Box>
+      )}
+
       {/* Footer */}
-      <Box>
+      <Box marginTop={isChatting || (chatResponse && !isChatting) ? 1 : 0}>
         <Text>Transcription: </Text>
         {getTranscriptionStatusText()}
       </Box>
     </Box>
   );
-}); 
+});

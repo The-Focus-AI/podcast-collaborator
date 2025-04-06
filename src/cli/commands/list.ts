@@ -22,15 +22,17 @@ interface ListOptions {
 // Utility functions moved to src/cli/utils/formatters.ts
 
 function formatEpisode(episode: RawPocketCastsEpisode): string {
+  const idWidth = 8; // Show first part of UUID
+  const id = chalk.dim(episode.uuid.substring(0, idWidth).padEnd(idWidth)); // Partial ID, dimmed
   const date = chalk.blue(formatDate(episode.published).padEnd(12));  // 12 chars
   const status = getStatusSymbols(episode).padEnd(4);                // 4 chars
   const duration = chalk.yellow(formatDuration(episode.duration).padEnd(7)); // 7 chars
   const progress = chalk.cyan(getProgress(episode).padStart(4));     // 4 chars
 
   // Calculate remaining space for titles
-  const totalWidth = process.stdout.columns || 120;
-  const usedWidth = 12 + 4 + 7 + 4 + 4; // date + status + duration + progress + padding
-  const remainingWidth = totalWidth - usedWidth;
+  const totalWidth = process.stdout.columns || 120; // Use 120 as fallback
+  const usedWidth = idWidth + 1 + 12 + 4 + 7 + 4 + 4; // ID + space + date + status + duration + progress + padding
+  const remainingWidth = Math.max(20, totalWidth - usedWidth); // Ensure minimum space for titles
   
   // Split remaining width between podcast and episode titles (40/60 split)
   const podcastWidth = Math.floor(remainingWidth * 0.4);
@@ -40,7 +42,7 @@ function formatEpisode(episode: RawPocketCastsEpisode): string {
   const episodeTitle = truncate(episode.title, episodeWidth);
 
   // Ensure consistent spacing and handle special cases
-  return `${date}${status}${duration} ${chalk.green(podcastTitle.padEnd(podcastWidth))} ${episodeTitle.padEnd(episodeWidth)}${progress}`;
+  return `${id} ${date}${status}${duration} ${chalk.green(podcastTitle.padEnd(podcastWidth))} ${episodeTitle.padEnd(episodeWidth)}${progress}`;
 }
 
 export function createListCommand(storageProvider: StorageProvider): Command {

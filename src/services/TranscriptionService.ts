@@ -1,4 +1,4 @@
-import { CoreMessage, generateObject } from "ai";
+import { CoreMessage, streamObject } from "ai"; // Import streamObject
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { Transcription, TranscriptionSchema } from "../storage/interfaces.js";
 import { v4 as uuidv4 } from "uuid";
@@ -119,19 +119,59 @@ export class TranscriptionService {
         },
         { role: "user", content: [{ type: "text", text: "transcript" }] },
       ] as CoreMessage[];
+logger.info(`Sending ${filePath} (${(fileData.length / (1024*1024)).toFixed(2)} MB) to model ${this.model} for transcription stream...`);
 
-      const response = await generateObject({
-        model: googleModel,
-        schema: TranscriptionSchema,
-        messages,
-      });
+const stream = await streamObject({
+  model: googleModel,
+  schema: TranscriptionSchema,
+  messages,
+});
 
-      console.log(JSON.stringify(response, null, 2));
+logger.info(`Receiving transcription stream from model...`);
+// Stop spinner from transcribe command *before* processing stream
+// Note: This assumes the spinner was passed or accessible, which it isn't directly.
+// We'll rely on the console logs for now. The spinner in transcribe.ts will stop on completion/error.
 
-      // Save raw response for debugging
-      await this.saveDebugInfo(transcriptionId, response, "raw_response");
+let finalTranscription: Transcription | null = null;
+let streamReceivedData = false; // Flag to check if we got anything
 
-      return response.object;
+logger.debug("Starting to process transcription stream...");
+try {
+  // Process the stream
+  for await (const partial of stream.partialObjectStream) {
+    streamReceivedData = true; // Mark that we received something
+    // Log raw partial chunk confirmation
+    console.log("\n--- Received Stream Chunk ---"); // Add newline to separate from spinner
+    // console.log(partial); // Log the raw object structure if needed
+    
+    // Keep track of the latest object (simple approach)
+    if (partial) {
+        finalTranscription = partial as Transcription;
+    }
+  }
+} catch (streamError) {
+  const errorMsg = streamError instanceof Error ? streamError.message : String(streamError);
+  logger.error(`Error occurred during transcription stream processing: ${errorMsg}`);
+  // We might want to throw here or handle differently depending on desired behavior
+  throw streamError;
+} finally {
+  logger.debug("Finished processing transcription stream loop."); // Log after loop/error/finally
+}
+
+if (!streamReceivedData) {
+   logger.warn("Transcription stream finished but yielded no partial objects.");
+}
+
+if (!finalTranscription) {
+  throw new Error("Transcription stream finished without producing a final object.");
+}
+
+logger.info(`Transcription stream finished.`);
+
+// Save the final reconstructed object for debugging
+await this.saveDebugInfo(transcriptionId, finalTranscription, "final_streamed_object");
+
+return finalTranscription;
     });
   }
 }
