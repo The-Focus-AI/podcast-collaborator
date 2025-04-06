@@ -3,7 +3,7 @@ import type { EpisodeService } from '../../services/EpisodeService.js'; // Impor
 import { logger } from '../../utils/logger.js';
 import ora from 'ora'; // Import ora for spinner/progress
 // import player from 'play-sound'; // Example playback library
-// import { exec } from 'child_process'; // For platform-specific command
+import { exec } from 'child_process'; // For platform-specific command
 
 // Removed placeholder service instantiations
 // const audioPlayer = player({}); // Placeholder
@@ -70,21 +70,51 @@ export function createPlayCommand(episodeService: EpisodeService): Command {
         await new Promise(resolve => setTimeout(resolve, 10000)); // Placeholder delay
         */
 
-        // Example using platform-specific command (macOS):
-        /*
-        exec(`afplay "${audioPath}"`, (error, stdout, stderr) => {
+        // Use platform-specific command (macOS):
+        logger.info(`Starting playback with afplay...`);
+        const playProcess = exec(`afplay "${audioPath}"`, (error, stdout, stderr) => {
           if (error) {
-             logger.error(`Error playing audio: ${error.message}`);
-             process.exit(1);
+             // Don't exit immediately, playback might be interrupted by user (Ctrl+C)
+             // which also registers as an error.
+             // Log error only if it's not a signal interruption? Needs refinement.
+             // For now, just log non-interrupt errors.
+             if (!error.signal) {
+                logger.error(`Playback error: ${error.message}`);
+             }
+             // process.exit(1); // Avoid exiting here
           }
           if (stderr) {
+             // afplay might output info/errors to stderr
              logger.warn(`Playback stderr: ${stderr}`);
           }
-          logger.success(`Finished playing episode ${episodeId}`);
+          // stdout might be empty for afplay
+          // if (stdout) {
+          //    logger.info(`Playback stdout: ${stdout}`);
+          // }
+          logger.success(`Finished playing episode: ${episode.title}`);
+          // Playback finished naturally or was stopped.
+          // We might not need to explicitly exit the process here,
+          // let the command handler finish.
         });
-        */
 
-        logger.warn('Audio playback not yet implemented.'); // Placeholder message
+        // Handle Ctrl+C gracefully during playback
+        process.on('SIGINT', () => {
+          logger.info('Playback interrupted by user (SIGINT). Stopping...');
+          if (playProcess) {
+            playProcess.kill('SIGINT'); // Send SIGINT to afplay
+          }
+          // Allow node to exit cleanly after handling SIGINT
+          process.exit(0);
+        });
+
+        // Keep the process alive while afplay is running.
+        // We need a way to wait for exec to finish or be interrupted.
+        // The callback handles the finish/error cases.
+        // The SIGINT handler handles interruption.
+        // No explicit wait needed here as exec runs in background
+        // and the callback/SIGINT handler will manage process lifecycle.
+
+        // logger.warn('Audio playback not yet implemented.'); // Removed placeholder
 
       // This is the end of the main try block
       } catch (error) {
