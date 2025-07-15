@@ -31,7 +31,7 @@
     "transcription"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "packageManager": "pnpm@10.6.1",
   "devDependencies": {
     "@eslint/js": "^9.23.0",
